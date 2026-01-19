@@ -1,0 +1,80 @@
+{
+    "name": "论文示例2：15工件3阶段真实案例",
+    "description": "完整的三目标优化案例，包含3速度等级、3技能等级、完整能耗参数",
+    "n_jobs": 15,
+    "n_stages": 3,
+    "machines_per_stage": [3, 3, 3],
+    "n_speed_levels": 3,
+    "n_skill_levels": 3,
+    
+    "energy_params": {
+        "_comment": "能耗参数 (kW)",
+        "processing_power": {
+            "_comment": "pe[stage][machine][speed] - 加工功率",
+            "stage1": {
+                "M1": [3.5, 5.5, 8.0],
+                "M2": [4.0, 6.0, 8.5],
+                "M3": [3.8, 5.8, 8.2]
+            },
+            "stage2": {
+                "M1": [4.2, 6.5, 9.0],
+                "M2": [3.8, 5.5, 7.8],
+                "M3": [4.0, 6.0, 8.5]
+            },
+            "stage3": {
+                "M1": [3.5, 5.2, 7.5],
+                "M2": [4.0, 6.0, 8.8],
+                "M3": [3.6, 5.5, 8.0]
+            }
+        },
+        "setup_power": {
+            "_comment": "se[stage][machine] - 换模功率",
+            "stage1": [2.5, 2.8, 2.6],
+            "stage2": [3.0, 2.6, 2.8],
+            "stage3": [2.4, 2.8, 2.5]
+        },
+        "idle_power": {
+            "_comment": "ie[stage][machine] - 空闲功率",
+            "stage1": [0.5, 0.6, 0.55],
+            "stage2": [0.6, 0.5, 0.55],
+            "stage3": [0.5, 0.6, 0.5]
+        },
+        "transport_power": 0.5,
+        "aux_power": 1.0
+    },
+    
+    "worker_params": {
+        "_comment": "工人参数",
+        "skill_levels": {
+            "A": {
+                "level": 0,
+                "salary": 150,
+                "available": 7,
+                "max_speed": 0,
+                "description": "初级工人，只能操作低速"
+            },
+            "B": {
+                "level": 1,
+                "salary": 225,
+                "available": 5,
+                "max_speed": 1,
+                "description": "中级工人，可操作低速和中速"
+            },
+            "C": {
+                "level": 2,
+                "salary": 300,
+                "available": 3,
+                "max_speed": 2,
+                "description": "高级工人，可操作所有速度"
+            }
+        },
+        "skill_wages": [150, 225, 300],
+        "workers_available": [7, 5, 3]
+    },
+    
+    "transport_time": [3, 3],
+    
+    "shift_duration": 480,
+    
+    "_note": "加工时间矩阵较大，建议通过程序随机生成或从CSV文件加载"
+}
