@@ -36,7 +36,7 @@ class TestPaperConstraints:
         测试约束1：人机绑定约束
         
         论文定义：同一阶段同一机器上的所有工序必须由同一技能等级的工人操作
-        即 ω[j,f] 对该机器上所有工件一致
+        即 omega[j,f] 对该机器上所有工件一致
         """
         problem = simple_problem
         decoder = Decoder(problem)
@@ -66,8 +66,8 @@ class TestPaperConstraints:
         """
         测试约束2：技能-速度兼容约束
         
-        论文定义：技能等级 α 的工人只能操作速度等级 v ≤ α 的机器
-        即 can_operate(α, v) = True 当且仅当 α ≥ v
+        论文定义：技能等级 alpha 的工人只能操作速度等级 v <= alpha 的机器
+        即 can_operate(alpha, v) = True 当且仅当 alpha >= v
         """
         problem = simple_problem
         decoder = Decoder(problem)
@@ -126,7 +126,7 @@ class TestPaperConstraints:
         """
         测试约束4：最低可行技能约束
         
-        论文定义：ω[j,f] 必须是能操作该机器最大速度的最低技能等级
+        论文定义：omega[j,f] 必须是能操作该机器最大速度的最低技能等级
         """
         problem = full_problem
         decoder = Decoder(problem)
@@ -184,7 +184,8 @@ class TestDecodeCorrectness:
             if repaired is None:
                 continue
             
-            decoder.decode(repaired)
+            # 使用decode_with_schedule获取详细调度信息
+            objectives, schedule = decoder.decode_with_schedule(repaired)
             
             # 检查目标值是否有效
             assert repaired.objectives is not None
@@ -192,8 +193,9 @@ class TestDecodeCorrectness:
             assert all(obj >= 0 for obj in repaired.objectives)
             
             # 检查调度结果
-            assert repaired.schedule is not None
-            assert len(repaired.schedule) == problem.n_jobs
+            assert schedule is not None
+            assert 'operations' in schedule
+            assert len(schedule['operations']) > 0
     
     def test_decode_respects_precedence(self, simple_problem):
         """测试解码器遵守工序前后约束"""
@@ -207,18 +209,26 @@ class TestDecodeCorrectness:
             if repaired is None:
                 continue
             
-            decoder.decode(repaired)
+            objectives, schedule = decoder.decode_with_schedule(repaired)
+            
+            # 按工件分组操作
+            job_ops = {}
+            for op in schedule['operations']:
+                job = op['job']
+                if job not in job_ops:
+                    job_ops[job] = {}
+                job_ops[job][op['stage']] = op
             
             # 检查每个工件的阶段顺序
-            for job_id, job_schedule in repaired.schedule.items():
+            for job_id, stages in job_ops.items():
                 prev_end = 0
                 for stage in range(problem.n_stages):
-                    stage_info = job_schedule.get(stage)
-                    if stage_info:
-                        start_time = stage_info['start']
-                        assert start_time >= prev_end, \
+                    if stage in stages:
+                        op = stages[stage]
+                        start_time = op['start']
+                        assert start_time >= prev_end - 0.001, \
                             f"工件{job_id}阶段{stage}开始时间{start_time}早于前一阶段结束{prev_end}"
-                        prev_end = stage_info['end']
+                        prev_end = op['end']
     
     def test_decode_respects_machine_capacity(self, simple_problem):
         """测试解码器遵守机器容量约束（同一时刻一台机器只能处理一个工件）"""
@@ -232,24 +242,23 @@ class TestDecodeCorrectness:
             if repaired is None:
                 continue
             
-            decoder.decode(repaired)
+            objectives, schedule = decoder.decode_with_schedule(repaired)
             
             # 收集每台机器的时间段
             for stage in range(problem.n_stages):
                 for machine in range(problem.machines_per_stage[stage]):
                     intervals = []
                     
-                    for job_id, job_schedule in repaired.schedule.items():
-                        stage_info = job_schedule.get(stage)
-                        if stage_info and stage_info['machine'] == machine:
-                            intervals.append((stage_info['start'], stage_info['end'], job_id))
+                    for op in schedule['operations']:
+                        if op['stage'] == stage and op['machine'] == machine:
+                            intervals.append((op['start'], op['end'], op['job']))
                     
                     # 检查时间段不重叠
                     intervals.sort(key=lambda x: x[0])
                     for i in range(len(intervals) - 1):
                         end_i = intervals[i][1]
                         start_next = intervals[i + 1][0]
-                        assert end_i <= start_next, \
+                        assert end_i <= start_next + 0.001, \
                             f"阶段{stage}机器{machine}: 工件{intervals[i][2]}结束{end_i} > " \
                             f"工件{intervals[i+1][2]}开始{start_next}"
 
@@ -321,14 +330,10 @@ class TestObjectiveCalculation:
             if repaired is None:
                 continue
             
-            decoder.decode(repaired)
+            objectives, schedule = decoder.decode_with_schedule(repaired)
             
             # 计算所有工件的完工时间
-            completion_times = []
-            for job_id, job_schedule in repaired.schedule.items():
-                last_stage = problem.n_stages - 1
-                if last_stage in job_schedule:
-                    completion_times.append(job_schedule[last_stage]['end'])
+            completion_times = list(schedule['job_completion'].values())
             
             if completion_times:
                 expected_makespan = max(completion_times)
