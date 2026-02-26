@@ -46,7 +46,8 @@ class TestSwapPathCorrectness:
     def test_swap_path_produces_valid_permutation(self):
         """交叉操作应产生有效的排列（无重复、无遗漏）"""
         problem, decoder, rng, p1, p2 = _make_problem_and_parents()
-        c1, c2 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
+        c1 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
+        c2 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
 
         for stage in range(problem.n_stages):
             perm1 = list(np.argsort(c1.sequence_priority[:, stage]))
@@ -61,7 +62,8 @@ class TestOffspringFeasibility:
 
     def test_offspring_satisfy_paper_constraints(self):
         problem, decoder, rng, p1, p2 = _make_problem_and_parents()
-        c1, c2 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
+        c1 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
+        c2 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
 
         ok1, details1 = c1.check_paper_constraints(problem)
         ok2, details2 = c2.check_paper_constraints(problem)
@@ -70,7 +72,8 @@ class TestOffspringFeasibility:
 
     def test_offspring_feasibility_check(self):
         problem, decoder, rng, p1, p2 = _make_problem_and_parents()
-        c1, c2 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
+        c1 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
+        c2 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
 
         is_feasible1, violations1 = c1.check_feasibility(problem)
         is_feasible2, violations2 = c2.check_feasibility(problem)
@@ -81,7 +84,8 @@ class TestOffspringFeasibility:
         """多种种子下子代均可行"""
         for seed in [1, 7, 42, 99, 123]:
             problem, decoder, rng, p1, p2 = _make_problem_and_parents(seed=seed)
-            c1, c2 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
+            c1 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
+            c2 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
             ok1, _ = c1.check_paper_constraints(problem)
             ok2, _ = c2.check_paper_constraints(problem)
             assert ok1, f"Seed {seed}: child1 failed"
@@ -93,7 +97,8 @@ class TestOffspringEvaluated:
 
     def test_objectives_not_none(self):
         problem, decoder, rng, p1, p2 = _make_problem_and_parents()
-        c1, c2 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
+        c1 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
+        c2 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
 
         assert c1.objectives is not None, "Child1 objectives should be evaluated"
         assert c2.objectives is not None, "Child2 objectives should be evaluated"
@@ -110,7 +115,8 @@ class TestCandidatePoolNonempty:
     def test_always_returns_two_solutions(self):
         """无论父代如何，都应返回两个解"""
         problem, decoder, rng, p1, p2 = _make_problem_and_parents()
-        c1, c2 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
+        c1 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
+        c2 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
 
         assert c1 is not None
         assert c2 is not None
@@ -123,7 +129,8 @@ class TestCandidatePoolNonempty:
         p_clone = p1.copy()
         decoder.decode(p_clone)
 
-        c1, c2 = four_matrix_sx_crossover(p1, p_clone, rng, problem, decoder)
+        c1 = four_matrix_sx_crossover(p1, p_clone, rng, problem, decoder)
+        c2 = four_matrix_sx_crossover(p1, p_clone, rng, problem, decoder)
         assert c1 is not None
         assert c2 is not None
         assert c1.objectives is not None
@@ -138,10 +145,10 @@ class TestDeterministic:
         problem, decoder, _, p1, p2 = _make_problem_and_parents(seed=42)
 
         rng1 = np.random.default_rng(100)
-        c1a, c2a = four_matrix_sx_crossover(p1, p2, rng1, problem, decoder)
+        c1a = four_matrix_sx_crossover(p1, p2, rng1, problem, decoder)
 
         rng2 = np.random.default_rng(100)
-        c1b, c2b = four_matrix_sx_crossover(p1, p2, rng2, problem, decoder)
+        c1b = four_matrix_sx_crossover(p1, p2, rng2, problem, decoder)
 
         np.testing.assert_array_equal(c1a.machine_assign, c1b.machine_assign)
         np.testing.assert_array_equal(c1a.sequence_priority, c1b.sequence_priority)
@@ -158,7 +165,8 @@ class TestSmallCases:
         problem, decoder, rng, p1, p2 = _make_problem_and_parents(
             seed=42, n_jobs=1, n_stages=2
         )
-        c1, c2 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
+        c1 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
+        c2 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
         assert c1.objectives is not None
         assert c2.objectives is not None
 
@@ -167,7 +175,8 @@ class TestSmallCases:
         problem, decoder, rng, p1, p2 = _make_problem_and_parents(
             seed=42, n_jobs=2, n_stages=2
         )
-        c1, c2 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
+        c1 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
+        c2 = four_matrix_sx_crossover(p1, p2, rng, problem, decoder)
         assert c1.objectives is not None
         assert c2.objectives is not None
         ok1, _ = c1.check_paper_constraints(problem)

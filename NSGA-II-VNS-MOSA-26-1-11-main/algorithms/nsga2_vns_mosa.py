@@ -132,9 +132,17 @@ class NSGA2_VNS_MOSA:
         decoder = nsga2.decoder
 
         def crossover(p1: Solution, p2: Solution) -> Tuple[Solution, Solution]:
-            if random.random() > nsga2.crossover_prob:
-                return p1.copy(), p2.copy()
-            return four_matrix_sx_crossover(p1, p2, self.rng, problem, decoder)
+            if self.rng.random() > self.nsga2.crossover_prob:
+                c1, c2 = p1.copy(), p2.copy()
+                if c1.objectives is None:
+                    decoder.decode(c1)
+                if c2.objectives is None:
+                    decoder.decode(c2)
+                return c1, c2
+            # four_matrix_sx_crossover 返回一个子代，因此需要调用两次
+            c1 = four_matrix_sx_crossover(p1, p2, self.rng, problem, decoder)
+            c2 = four_matrix_sx_crossover(p2, p1, self.rng, problem, decoder) # 交换父代以增加多样性
+            return c1, c2
 
         def mutate(sol: Solution) -> Solution:
             if random.random() > nsga2.mutation_prob:

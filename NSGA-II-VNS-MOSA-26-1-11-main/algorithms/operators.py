@@ -24,7 +24,7 @@ def four_matrix_sx_crossover(
     rng: np.random.Generator,
     problem: 'SchedulingProblem',
     decoder: 'Decoder'
-) -> Tuple['Solution', 'Solution']:
+) -> 'Solution':
     """
     四矩阵交换序列交叉 (4M-SX Crossover)
 
@@ -48,29 +48,31 @@ def four_matrix_sx_crossover(
     - 单目标贪心（"better than A"）扩展为多目标候选池选择。
 
     Returns:
-        两个子代 (child1, child2)，已 repair 且已 decode。
+        1 最佳子代 (最优的候选解，已 repair 且已 decode)。
     """
     n_jobs = int(problem.n_jobs)
     n_stages = int(problem.n_stages)
 
+    def hash_solution(sol):
+        return hash(sol.machine_assign.tobytes()) ^ hash(sol.sequence_priority.tobytes()) ^ hash(sol.speed_level.tobytes()) ^ hash(sol.worker_skill.tobytes())
+
+    # ---- 安全兜底：如果不足以操作则直接返回父代副本 ----
     if n_jobs <= 1:
-        c1, c2 = parent1.copy(), parent2.copy()
+        c1 = parent1.copy()
         if c1.repair(problem) is None:
             c1 = parent1.copy()
             c1.repair(problem)
-        if c2.repair(problem) is None:
-            c2 = parent2.copy()
-            c2.repair(problem)
-        decoder.decode(c1); decoder.decode(c2)
-        return c1, c2
+        decoder.decode(c1)
+        return c1
 
     # ---- 阶段选择 ----
     target_stage = int(rng.integers(0, n_stages))
 
     def get_permutation(sol, stage):
-        """提取某阶段上工件的排列（按 sequence_priority 排序）"""
+        """提取某阶段上工件的排列（稳定排序，工件初始索引为第二关键字）"""
         priorities = sol.sequence_priority[:, stage]
-        return list(np.argsort(priorities))
+        # np.lexsort 返回按传入键名升序排列的索引，后传入的为第一关键字
+        return list(np.lexsort((np.arange(n_jobs), priorities)))
 
     def apply_stage_swap(sol, job_a, job_b, stage):
         """交换两个工件在指定阶段上的四矩阵值（M, Q, V, W）"""
@@ -116,28 +118,22 @@ def four_matrix_sx_crossover(
         w = np.array([1/3, 1/3, 1/3], dtype=float)
         return float(np.dot(w, z))
 
-    # ---- 沿 swap-path 生成候选解 ----
+    seen_keys = set()
     candidates = []
 
     def gen_swap_path(p_from, p_to):
-        """
-        SX 核心：从 p_from 逐步变换到 p_to（Guan et al. Algorithm 1 适配版）
-
-        1. C ← p_from.copy()
-        2. 提取 π_C 和 π_target（阶段 target_stage 上的排列）
-        3. 逐位对比：若 π_C[i] ≠ π_target[i]，
-           找到 π_target[i] 在 π_C 中的位置 j，
-           交换 C 中工件 π_C[i] 和 π_C[j] 在阶段 target_stage 的四矩阵值
-        4. 每次交换后 repair → decode → 加入候选池
-        """
+        """双向 Swap-path 遍历，并利用去重集合筛选"""
         pi_target = get_permutation(p_to, target_stage)
 
         cur = p_from.copy()
-        # 将起点也加入候选池
-        cur.objectives = None
+        
+        # 必须先修复并解码评估再求哈希并入池
         if cur.repair(problem) is not None:
             decoder.decode(cur)
-            candidates.append(cur)
+            init_key = hash_solution(cur)
+            if init_key not in seen_keys:
+                candidates.append(cur)
+                seen_keys.add(init_key)
 
         pi_cur = get_permutation(cur, target_stage)
         # 建立"工件 → 当前位置"的反向索引
@@ -164,49 +160,31 @@ def four_matrix_sx_crossover(
             apply_stage_swap(nxt, job_a, job_b, target_stage)
             nxt.objectives = None
 
-            if nxt.repair(problem) is None:
-                # 修复失败，跳过此步但继续后续交换
-                continue
+            if nxt.repair(problem) is not None:
+                decoder.decode(nxt)
+                nxt_key = hash_solution(nxt)
 
-            decoder.decode(nxt)
-            candidates.append(nxt)
+                if nxt_key not in seen_keys:
+                    candidates.append(nxt)
+                    seen_keys.add(nxt_key)
             cur = nxt
 
     # 双向路径搜索
     gen_swap_path(parent1, parent2)
     gen_swap_path(parent2, parent1)
 
-    # ---- 去重 ----
-    uniq = []
-    seen = set()
-    for s in candidates:
-        key = (tuple(round(float(x), 6) for x in s.objectives),
-               s.machine_assign.tobytes(),
-               s.sequence_priority.tobytes())
-        if key in seen:
-            continue
-        seen.add(key)
-        uniq.append(s)
-    candidates = uniq
-
     # ---- 安全兜底：若候选池为空，返回父代副本 ----
     if len(candidates) == 0:
-        c1, c2 = parent1.copy(), parent2.copy()
+        c1 = parent1.copy()
         if c1.repair(problem) is None:
             c1 = parent1.copy(); c1.repair(problem)
-        if c2.repair(problem) is None:
-            c2 = parent2.copy(); c2.repair(problem)
-        decoder.decode(c1); decoder.decode(c2)
-        return c1, c2
+        decoder.decode(c1)
+        return c1
 
     if len(candidates) == 1:
-        c2 = parent2.copy()
-        if c2.repair(problem) is None:
-            c2 = parent1.copy(); c2.repair(problem)
-        decoder.decode(c2)
-        return candidates[0], c2
+        return candidates[0]
 
-    # ---- 非支配排序 + 拥挤度选择两个子代 ----
+    # ---- 非支配排序 + 拥挤度选择 1 个子代 ----
     def nondominated_set(sols):
         nd = []
         for s in sols:
@@ -226,19 +204,14 @@ def four_matrix_sx_crossover(
     if len(nd) >= 2:
         cd = crowding_distance_map(nd)
         nd_sorted = sorted(nd, key=lambda s: cd.get(id(s), 0.0), reverse=True)
-        return nd_sorted[0], nd_sorted[1]
+        return nd_sorted[0]
 
     if len(nd) == 1:
-        first = nd[0]
-        rest = [s for s in candidates if s is not first]
-        if not rest:
-            return first.copy(), first.copy()
-        second = min(rest, key=lambda s: phi_score(s, candidates))
-        return first, second
+        return nd[0]
 
-    # 无非支配解：按 φ 最小选前二
+    # 无非支配解：按 φ 最小选 1 个
     candidates_sorted = sorted(candidates, key=lambda s: phi_score(s, candidates))
-    return candidates_sorted[0], candidates_sorted[1]
+    return candidates_sorted[0]
 
 
 
@@ -423,7 +396,7 @@ def apply_crossover_with_probability(
     rng: np.random.Generator,
     problem: 'SchedulingProblem',
     decoder: 'Decoder'
-) -> Tuple['Solution', 'Solution']:
+) -> 'Solution':
     """
     带概率的交叉操作
     
@@ -436,16 +409,13 @@ def apply_crossover_with_probability(
         decoder: 解码器
         
     Returns:
-        (child1, child2): 两个子代
+        child: 返回 1 个子代
     """
     if rng.random() > crossover_prob:
         c1 = parent1.copy()
-        c2 = parent2.copy()
         if c1.objectives is None:
             decoder.decode(c1)
-        if c2.objectives is None:
-            decoder.decode(c2)
-        return c1, c2
+        return c1
     
     return four_matrix_sx_crossover(parent1, parent2, rng, problem, decoder)
 

@@ -270,9 +270,13 @@ class NSGAII:
                 self.decoder.decode(c2)
             return c1, c2
     
-        return four_matrix_sx_crossover(
+        child1 = four_matrix_sx_crossover(
             parent1, parent2, self.rng, self.problem, self.decoder
         )
+        child2 = four_matrix_sx_crossover(
+            parent1, parent2, self.rng, self.problem, self.decoder
+        )
+        return child1, child2
     
     def mutate(self, solution: Solution) -> Solution:
         """
@@ -359,7 +363,7 @@ class NSGAII:
             parent1 = self.tournament_selection(population)
             parent2 = self.tournament_selection(population)
 
-            # 交叉 (4M-SX，内部已 repair + decode)
+            # 交叉 (4M-SX，内部已 repair + decode，连续执行两次获取两个子代)
             child1, child2 = self.crossover(parent1, parent2)
 
             # 变异（变异后需重新 repair + decode）
