@@ -79,12 +79,14 @@ FIXED_HYBRID_PARAMS = {
 }
 
 
-def get_params_for_run(run_id: int) -> Dict[str, Any]:
+def get_params_for_run(run_id: int, custom_factors: Dict[str, Any] = None) -> Dict[str, Any]:
     """
     获取指定运行编号的参数配置
     
     Args:
         run_id: 运行编号 (0-15)
+        custom_factors: 可选的自定义因子水平配置，格式与 FACTORS 相同
+                       如果提供则使用自定义水平，否则使用默认 FACTORS
         
     Returns:
         包含所有因子参数值的字典
@@ -92,19 +94,33 @@ def get_params_for_run(run_id: int) -> Dict[str, Any]:
     if run_id < 0 or run_id >= len(L16_ARRAY):
         raise ValueError(f"run_id 必须在 0-{len(L16_ARRAY)-1} 范围内，得到 {run_id}")
     
+    # 使用自定义因子或默认因子
+    factors = custom_factors if custom_factors is not None else FACTORS
+    
     levels = L16_ARRAY[run_id]
     
     params = {
-        'population_size': FACTORS['A']['levels'][levels[0]],
-        'crossover_prob': FACTORS['B']['levels'][levels[1]],
-        'mutation_prob': FACTORS['C']['levels'][levels[2]],
-        'initial_temp': FACTORS['D']['levels'][levels[3]],
+        'population_size': factors['A']['levels'][levels[0]],
+        'crossover_prob': factors['B']['levels'][levels[1]],
+        'mutation_prob': factors['C']['levels'][levels[2]],
+        'initial_temp': factors['D']['levels'][levels[3]],
     }
     
     # 添加固定参数
     params.update(FIXED_HYBRID_PARAMS)
     
     return params
+
+
+def get_default_factors() -> Dict[str, Any]:
+    """
+    获取默认的因子水平配置（深拷贝）
+    
+    Returns:
+        因子水平配置字典
+    """
+    import copy
+    return copy.deepcopy(FACTORS)
 
 
 def get_level_indices_for_run(run_id: int) -> Dict[str, int]:

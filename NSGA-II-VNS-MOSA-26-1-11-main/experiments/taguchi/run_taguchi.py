@@ -111,8 +111,6 @@ def run_hybrid(problem: SchedulingProblem,
         cooling_rate=params.get('cooling_rate', FIXED_HYBRID_PARAMS['cooling_rate']),
         final_temp=params.get('final_temp', FIXED_HYBRID_PARAMS['final_temp']),
         max_iterations=params.get('max_iterations', FIXED_HYBRID_PARAMS['max_iterations']),
-        vns_iterations=params.get('vns_iterations', FIXED_HYBRID_PARAMS['vns_iterations']),
-        n_representative=params.get('n_representative', FIXED_HYBRID_PARAMS['n_representative']),
         seed=seed
     )
     final_archive = mosa.run(pareto_nsga)

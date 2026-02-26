@@ -24,7 +24,7 @@ from PyQt5.QtWidgets import (
     QTextEdit, QFileDialog
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QFont, QPixmap
+from PyQt5.QtGui import QFont, QPixmap, QColor
 
 # 添加项目路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -105,11 +105,12 @@ class TaguchiWorker(QThread):
     finished = pyqtSignal(dict)  # 结果字典
     error = pyqtSignal(str)  # 错误消息
     
-    def __init__(self, n_rep: int, base_seed: int, output_dir: str):
+    def __init__(self, n_rep: int, base_seed: int, output_dir: str, custom_factors: dict = None):
         super().__init__()
         self.n_rep = n_rep
         self.base_seed = base_seed
         self.output_dir = output_dir
+        self.custom_factors = custom_factors  # 用户自定义因子水平
         self._is_running = True
     
     def stop(self):
@@ -155,6 +156,18 @@ class TaguchiWorker(QThread):
             # 构造 PF_ref
             self.progress.emit(85, 100, "正在构造参考前沿...")
             pf_ref = build_pf_ref(all_objectives)
+            
+            # 检查是否有有效结果
+            if len(pf_ref) == 0:
+                raise ValueError(
+                    "所有实验运行都未产生有效解。\n\n"
+                    "可能原因：\n"
+                    "1. 因子水平值设置不合理\n"
+                    "2. population_size 太小\n"
+                    "3. 算法参数导致收敛问题\n\n"
+                    "请检查因子水平设置后重试。"
+                )
+            
             save_pf_ref(pf_ref, paths['pf_ref'])
             
             # 计算归一化参数
@@ -233,6 +246,7 @@ class TaguchiWorker(QThread):
         from experiments.taguchi.run_taguchi import run_hybrid
         
         n_runs = get_n_runs()
+        custom_factors = self.custom_factors  # 获取自定义因子水平
         total_runs = n_runs * n_rep
         
         results = []
@@ -242,7 +256,7 @@ class TaguchiWorker(QThread):
             if not self._is_running:
                 break
                 
-            params = get_params_for_run(run_id)
+            params = get_params_for_run(run_id, custom_factors)
             level_indices = get_level_indices_for_run(run_id)
             
             for rep_id in range(n_rep):
@@ -399,31 +413,59 @@ class TaguchiWindow(QMainWindow):
         layout.addWidget(settings_group)
         
         # ===== 因子水平表 =====
-        factors_group = QGroupBox("📊 因子水平 (4因子×4水平)")
+        factors_group = QGroupBox("📊 因子水平 (4因子×4水平) - 可编辑")
         factors_layout = QVBoxLayout(factors_group)
         
-        factors_table = QTableWidget()
-        factors_table.setRowCount(4)
-        factors_table.setColumnCount(5)
-        factors_table.setHorizontalHeaderLabels(["因子", "水平1", "水平2", "水平3", "水平4"])
-        factors_table.setVerticalHeaderLabels(["A", "B", "C", "D"])
+        # 提示标签
+        hint_label = QLabel("💡 双击单元格编辑水平值（因子名称列不可编辑）")
+        hint_label.setStyleSheet("font-size: 11px; color: #1565C0; font-weight: normal;")
+        factors_layout.addWidget(hint_label)
         
-        factors_data = [
+        self.factors_table = QTableWidget()
+        self.factors_table.setRowCount(4)
+        self.factors_table.setColumnCount(5)
+        self.factors_table.setHorizontalHeaderLabels(["因子", "水平1", "水平2", "水平3", "水平4"])
+        self.factors_table.setVerticalHeaderLabels(["A", "B", "C", "D"])
+        
+        # 默认因子水平数据
+        self.default_factors_data = [
             ("population_size", "50", "100", "150", "200"),
             ("crossover_prob", "0.70", "0.80", "0.90", "0.95"),
             ("mutation_prob", "0.05", "0.10", "0.15", "0.20"),
             ("initial_temp", "100", "300", "500", "1000"),
         ]
         
-        for row, (name, *levels) in enumerate(factors_data):
-            factors_table.setItem(row, 0, QTableWidgetItem(name))
-            for col, level in enumerate(levels):
-                factors_table.setItem(row, col + 1, QTableWidgetItem(level))
+        self._fill_factors_table(self.default_factors_data)
         
-        factors_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        factors_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        factors_table.setMaximumHeight(150)
-        factors_layout.addWidget(factors_table)
+        self.factors_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        # 移除只读限制，允许用户编辑水平值
+        self.factors_table.setMaximumHeight(170)
+        factors_layout.addWidget(self.factors_table)
+        
+        # 按钮区域（水平布局）
+        btn_layout = QHBoxLayout()
+        
+        # 恢复默认值按钮
+        self.reset_btn = QPushButton("🔄 恢复默认值")
+        self.reset_btn.setStyleSheet("background-color: #FF9800; padding: 6px 12px; font-size: 12px;")
+        self.reset_btn.clicked.connect(self.on_reset_factors)
+        btn_layout.addWidget(self.reset_btn)
+        
+        # 确定按钮 - 锁定因子水平
+        self.confirm_factors_btn = QPushButton("✅ 确定")
+        self.confirm_factors_btn.setStyleSheet("background-color: #4CAF50; padding: 6px 12px; font-size: 12px;")
+        self.confirm_factors_btn.clicked.connect(self.on_confirm_factors)
+        btn_layout.addWidget(self.confirm_factors_btn)
+        
+        # 编辑按钮 - 解锁因子水平（初始禁用）
+        self.edit_factors_btn = QPushButton("✏️ 编辑")
+        self.edit_factors_btn.setStyleSheet("background-color: #2196F3; padding: 6px 12px; font-size: 12px;")
+        self.edit_factors_btn.clicked.connect(self.on_edit_factors)
+        self.edit_factors_btn.setEnabled(False)  # 初始禁用
+        btn_layout.addWidget(self.edit_factors_btn)
+        
+        btn_layout.addStretch()
+        factors_layout.addLayout(btn_layout)
         
         layout.addWidget(factors_group)
         
@@ -516,10 +558,143 @@ class TaguchiWindow(QMainWindow):
         
         return widget
     
+    def _fill_factors_table(self, factors_data):
+        """填充因子水平表格"""
+        for row, (name, *levels) in enumerate(factors_data):
+            # 因子名称列（不可编辑）
+            name_item = QTableWidgetItem(name)
+            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
+            name_item.setBackground(QColor('#E3F2FD'))
+            self.factors_table.setItem(row, 0, name_item)
+            # 水平值列（可编辑）
+            for col, level in enumerate(levels):
+                self.factors_table.setItem(row, col + 1, QTableWidgetItem(level))
+    
+    def on_reset_factors(self):
+        """恢复默认因子水平值"""
+        self._fill_factors_table(self.default_factors_data)
+        QMessageBox.information(self, "已重置", "因子水平值已恢复为默认值")
+    
+    def on_confirm_factors(self):
+        """确定因子水平设置，锁定表格"""
+        # 验证因子水平值
+        is_valid, error_msg = self.validate_factor_levels()
+        if not is_valid:
+            QMessageBox.warning(self, "输入错误", f"因子水平值验证失败:\n\n{error_msg}")
+            return
+        
+        # 锁定表格 - 禁止编辑
+        self.factors_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        
+        # 更新按钮显示
+        self.reset_btn.setEnabled(False)
+        self.confirm_factors_btn.setEnabled(False)
+        self.edit_factors_btn.setEnabled(True)
+        
+        # 更新表格样式表示已锁定
+        self.factors_table.setStyleSheet("QTableWidget { background-color: #E8F5E9; }")
+        
+        QMessageBox.information(self, "已确定", "因子水平设置已锁定\n点击\"编辑\"按钮可重新修改")
+    
+    def on_edit_factors(self):
+        """解锁因子水平设置，允许编辑"""
+        # 解锁表格 - 允许编辑
+        self.factors_table.setEditTriggers(QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed)
+        
+        # 更新按钮显示
+        self.reset_btn.setEnabled(True)
+        self.confirm_factors_btn.setEnabled(True)
+        self.edit_factors_btn.setEnabled(False)
+        
+        # 恢复表格样式
+        self.factors_table.setStyleSheet("")
+        
+        QMessageBox.information(self, "编辑模式", "因子水平设置已解锁，可以编辑")
+    
+    def get_custom_factor_levels(self):
+        """
+        从表格读取用户自定义的因子水平值
+        
+        Returns:
+            dict: 自定义因子水平字典，格式与 experiments/taguchi/designs.py 中的 FACTORS 相同
+        """
+        custom_factors = {}
+        factor_names = ['A', 'B', 'C', 'D']
+        
+        for row in range(4):
+            factor_key = factor_names[row]
+            param_name = self.factors_table.item(row, 0).text()
+            levels = []
+            for col in range(1, 5):
+                item = self.factors_table.item(row, col)
+                if item:
+                    levels.append(item.text())
+                else:
+                    levels.append("")
+            
+            custom_factors[factor_key] = {
+                'name': param_name,
+                'levels': levels
+            }
+        
+        return custom_factors
+    
+    def validate_factor_levels(self):
+        """
+        验证用户输入的因子水平值是否合法
+        
+        Returns:
+            tuple: (is_valid: bool, error_message: str)
+        """
+        factor_names = ['A', 'B', 'C', 'D']
+        factor_params = ['population_size', 'crossover_prob', 'mutation_prob', 'initial_temp']
+        
+        for row in range(4):
+            param_name = factor_params[row]
+            for col in range(1, 5):
+                item = self.factors_table.item(row, col)
+                if item is None or item.text().strip() == "":
+                    return False, f"因子 {factor_names[row]} 的水平{col} 不能为空"
+                
+                try:
+                    value = float(item.text())
+                    # 参数特定验证
+                    if param_name == 'population_size':
+                        if value <= 0 or value != int(value):
+                            return False, f"population_size 必须是正整数，当前值: {item.text()}"
+                    elif param_name in ['crossover_prob', 'mutation_prob']:
+                        if value < 0 or value > 1:
+                            return False, f"{param_name} 必须在 0-1 范围内，当前值: {item.text()}"
+                    elif param_name == 'initial_temp':
+                        if value <= 0:
+                            return False, f"initial_temp 必须是正数，当前值: {item.text()}"
+                except ValueError:
+                    return False, f"因子 {factor_names[row]} 的水平{col} 不是有效数字: {item.text()}"
+        
+        return True, ""
+    
     def on_start_experiment(self):
         """开始实验"""
+        # 验证因子水平值
+        is_valid, error_msg = self.validate_factor_levels()
+        if not is_valid:
+            QMessageBox.warning(self, "输入错误", f"因子水平值验证失败:\n\n{error_msg}")
+            return
+        
         n_rep = self.rep_spin.value()
         base_seed = self.seed_spin.value()
+        
+        # 获取用户自定义因子水平
+        custom_factors = self.get_custom_factor_levels()
+        
+        # 转换水平值为正确的数值类型
+        for factor_key in custom_factors:
+            levels_str = custom_factors[factor_key]['levels']
+            param_name = custom_factors[factor_key]['name']
+            if param_name == 'population_size':
+                custom_factors[factor_key]['levels'] = [int(float(v)) for v in levels_str]
+            else:
+                custom_factors[factor_key]['levels'] = [float(v) for v in levels_str]
         
         # 确定输出目录
         output_dir = os.path.join(
@@ -549,8 +724,8 @@ class TaguchiWindow(QMainWindow):
         self.rep_spin.setEnabled(False)
         self.seed_spin.setEnabled(False)
         
-        # 启动工作线程
-        self.worker = TaguchiWorker(n_rep, base_seed, output_dir)
+        # 启动工作线程，传入自定义因子水平
+        self.worker = TaguchiWorker(n_rep, base_seed, output_dir, custom_factors)
         self.worker.progress.connect(self.on_progress)
         self.worker.finished.connect(self.on_finished)
         self.worker.error.connect(self.on_error)

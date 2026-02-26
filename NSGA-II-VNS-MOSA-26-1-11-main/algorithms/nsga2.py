@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models.problem import SchedulingProblem
 from models.solution import Solution
 from models.decoder import Decoder
+from algorithms.operators import four_matrix_sx_crossover
 
 
 class NSGAII:
@@ -52,6 +53,7 @@ class NSGAII:
         
         self.decoder = Decoder(problem)
         self.population: List[Solution] = []
+        self.rng = np.random.default_rng(seed)
         
         # 收敛历史记录
         self.convergence_history = {
@@ -247,49 +249,30 @@ class NSGAII:
     
     def crossover(self, parent1: Solution, parent2: Solution) -> Tuple[Solution, Solution]:
         """
-        交叉操作 - 工件级别交叉
+        交叉操作 - 四矩阵交换序列交叉 (4M-SX)
     
-        随机选择一些工件，交换两个父代在这些工件上的所有决策。
+        基于 Guan et al. (2023) 的 Swap Crossover，适配四矩阵编码。
+        在随机选定的阶段上构建 swap-path，逐步交换两个工件的四矩阵值，
+        收集中间解候选池，用非支配排序+拥挤度选出两个子代。
     
         Args:
             parent1: 父代1
             parent2: 父代2
         
         Returns:
-            (child1, child2): 两个子代
+            (child1, child2): 两个子代（已 repair 且已 decode）
         """
         if random.random() > self.crossover_prob:
-            return parent1.copy(), parent2.copy()
+            c1, c2 = parent1.copy(), parent2.copy()
+            if c1.objectives is None:
+                self.decoder.decode(c1)
+            if c2.objectives is None:
+                self.decoder.decode(c2)
+            return c1, c2
     
-        child1 = parent1.copy()
-        child2 = parent2.copy()
-    
-        n_jobs = self.problem.n_jobs
-    
-        # 随机选择交叉点 (工件)
-        crossover_point = random.randint(1, n_jobs - 1)
-    
-        # 交换crossover_point之后的工件
-        for job in range(crossover_point, n_jobs):
-            for stage in range(self.problem.n_stages):
-                # 交换四个矩阵的对应元素
-                child1.machine_assign[job, stage], child2.machine_assign[job, stage] = \
-                    child2.machine_assign[job, stage], child1.machine_assign[job, stage]
-            
-                child1.sequence_priority[job, stage], child2.sequence_priority[job, stage] = \
-                    child2.sequence_priority[job, stage], child1.sequence_priority[job, stage]
-            
-                child1.speed_level[job, stage], child2.speed_level[job, stage] = \
-                    child2.speed_level[job, stage], child1.speed_level[job, stage]
-            
-                child1.worker_skill[job, stage], child2.worker_skill[job, stage] = \
-                    child2.worker_skill[job, stage], child1.worker_skill[job, stage]
-    
-        # 清除缓存的目标值
-        child1.objectives = None
-        child2.objectives = None
-    
-        return child1, child2
+        return four_matrix_sx_crossover(
+            parent1, parent2, self.rng, self.problem, self.decoder
+        )
     
     def mutate(self, solution: Solution) -> Solution:
         """
@@ -359,8 +342,10 @@ class NSGAII:
         """
         创建子代种群
 
-        注意：repair() 可能返回 None（修复失败）。修复失败的子代将被丢弃并重新生成，
-        保证进入后续排序/选择的个体均为“可行/修复成功”。
+        注意：
+        - crossover (4M-SX) 内部已完成 repair + decode，返回的子代是完整评估的解。
+        - mutate 之后需要重新 repair + decode。
+        - repair() 可能返回 None（修复失败），修复失败的子代将被丢弃并重新生成。
         """
         offspring: List[Solution] = []
 
@@ -374,10 +359,10 @@ class NSGAII:
             parent1 = self.tournament_selection(population)
             parent2 = self.tournament_selection(population)
 
-            # 交叉
+            # 交叉 (4M-SX，内部已 repair + decode)
             child1, child2 = self.crossover(parent1, parent2)
 
-            # 变异
+            # 变异（变异后需重新 repair + decode）
             child1 = self.mutate(child1)
             child2 = self.mutate(child2)
 

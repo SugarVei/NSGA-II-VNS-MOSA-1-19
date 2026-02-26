@@ -55,6 +55,15 @@ COLORS = {
     'text_muted': '#7f8c8d',      # 柔和文字
     'border': '#D5D0CA',          # 边框色
     'border_focus': '#F5A623',    # 聚焦边框色
+    # 渐变色端点
+    'grad_data_start': '#E8F6EF',     # 数据模式卡片 浅绿
+    'grad_data_end': '#D4EFDF',
+    'grad_problem_start': '#EBF5FB',  # 问题参数卡片 浅蓝
+    'grad_problem_end': '#D6EAF8',
+    'grad_algo_start': '#FEF9E7',     # 算法参数卡片 浅黄
+    'grad_algo_end': '#FCF3CF',
+    'grad_weights_start': '#F5EEF8',  # 目标权重卡片 浅紫
+    'grad_weights_end': '#E8DAEF',
 }
 
 MAIN_STYLE = f"""
@@ -223,7 +232,9 @@ QComboBox QAbstractItemView {{
 
 PRIMARY_BUTTON_STYLE = f"""
 QPushButton {{
-    background-color: {COLORS['success']};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                stop:0 {COLORS['success']},
+                                stop:1 #2ecc71);
     color: {COLORS['text_light']};
     border: none;
     padding: 14px 32px;
@@ -232,16 +243,22 @@ QPushButton {{
     font-weight: bold;
 }}
 QPushButton:hover {{
-    background-color: #219a52;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                stop:0 #219a52,
+                                stop:1 #27ae60);
 }}
 QPushButton:pressed {{
-    background-color: #1e8449;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                stop:0 #1e8449,
+                                stop:1 #219a52);
 }}
 """
 
 SECONDARY_BUTTON_STYLE = f"""
 QPushButton {{
-    background-color: {COLORS['dark_card']};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                stop:0 {COLORS['dark_card']},
+                                stop:1 #636e72);
     color: {COLORS['text_light']};
     border: none;
     padding: 14px 32px;
@@ -250,10 +267,14 @@ QPushButton {{
     font-weight: bold;
 }}
 QPushButton:hover {{
-    background-color: #3d4548;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                stop:0 #3d4548,
+                                stop:1 #576570);
 }}
 QPushButton:pressed {{
-    background-color: #1d2426;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                stop:0 #1d2426,
+                                stop:1 #3d4548);
 }}
 """
 
@@ -928,7 +949,9 @@ class MainApp(QMainWindow):
         title_label.setStyleSheet(f"""
             color: {COLORS['text_light']};
             padding: 20px;
-            background-color: {COLORS['dark_card']};
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                        stop:0 {COLORS['dark_card']},
+                                        stop:1 #636e72);
             border-radius: 16px;
             font-size: 20px;
         """)
@@ -941,7 +964,9 @@ class MainApp(QMainWindow):
         self.taguchi_btn = QPushButton("🔬 田口设计 (参数调优)")
         self.taguchi_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {COLORS['secondary']};
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                            stop:0 {COLORS['secondary']},
+                                            stop:1 #5dade2);
                 color: {COLORS['text_light']};
                 border: none;
                 padding: 14px 28px;
@@ -950,7 +975,9 @@ class MainApp(QMainWindow):
                 font-weight: bold;
             }}
             QPushButton:hover {{
-                background-color: #2980b9;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                            stop:0 #2980b9,
+                                            stop:1 #3498db);
             }}
         """)
         self.taguchi_btn.setToolTip("使用田口实验法 L16(4⁴) 正交表进行算法参数调优")
@@ -961,7 +988,9 @@ class MainApp(QMainWindow):
         self.comparison_btn = QPushButton("📊 算法对比试验")
         self.comparison_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: #8e44ad;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                            stop:0 #8e44ad,
+                                            stop:1 #a569bd);
                 color: {COLORS['text_light']};
                 border: none;
                 padding: 14px 28px;
@@ -970,7 +999,9 @@ class MainApp(QMainWindow):
                 font-weight: bold;
             }}
             QPushButton:hover {{
-                background-color: #7d3c98;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                            stop:0 #7d3c98,
+                                            stop:1 #8e44ad);
             }}
         """)
         self.comparison_btn.setToolTip("对比多种优化算法的性能（IGD/HV/GD指标）")
@@ -1030,7 +1061,9 @@ class MainApp(QMainWindow):
         self.lock_btn = QPushButton("🔒 确认参数")
         self.lock_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {COLORS['success']};
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                            stop:0 {COLORS['success']},
+                                            stop:1 #2ecc71);
                 color: {COLORS['text_light']};
                 border: none;
                 padding: 18px 48px;
@@ -1039,7 +1072,9 @@ class MainApp(QMainWindow):
                 font-size: 16px;
             }}
             QPushButton:hover {{
-                background-color: #219a52;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                            stop:0 #219a52,
+                                            stop:1 #27ae60);
             }}
         """)
         self.lock_btn.clicked.connect(self.on_lock_params)
@@ -1048,7 +1083,9 @@ class MainApp(QMainWindow):
         self.unlock_btn = QPushButton("🔓 修改参数")
         self.unlock_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {COLORS['warning']};
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                            stop:0 {COLORS['warning']},
+                                            stop:1 #f5b041);
                 color: {COLORS['text_dark']};
                 border: none;
                 padding: 18px 48px;
@@ -1057,7 +1094,9 @@ class MainApp(QMainWindow):
                 font-size: 16px;
             }}
             QPushButton:hover {{
-                background-color: #e09612;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                            stop:0 #e09612,
+                                            stop:1 #f39c12);
             }}
         """)
         self.unlock_btn.clicked.connect(self.on_unlock_params)
@@ -1142,6 +1181,31 @@ class MainApp(QMainWindow):
     def create_mode_group(self, parent_layout):
         """创建数据模式选择组 - 内容居中"""
         group = QGroupBox("📊 数据输入模式")
+        group.setStyleSheet(f"""
+            QGroupBox {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                            stop:0 {COLORS['grad_data_start']},
+                                            stop:1 {COLORS['grad_data_end']});
+                border: 1px solid #C8E6C9;
+                border-radius: 16px;
+                margin-top: 24px;
+                padding: 24px 20px 20px 20px;
+                font-weight: bold;
+                font-size: 16px;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                left: 20px;
+                padding: 6px 16px;
+                color: {COLORS['text_dark']};
+                font-size: 16px;
+                font-weight: bold;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                            stop:0 {COLORS['grad_data_start']},
+                                            stop:1 {COLORS['grad_data_end']});
+                border-radius: 8px;
+            }}
+        """)
         layout = QHBoxLayout(group)
         layout.setAlignment(Qt.AlignCenter)  # 内容居中
         layout.setSpacing(20)
@@ -1181,6 +1245,31 @@ class MainApp(QMainWindow):
     def create_problem_group(self, parent_layout):
         """创建问题参数组"""
         group = QGroupBox("🔧 问题参数")
+        group.setStyleSheet(f"""
+            QGroupBox {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                            stop:0 {COLORS['grad_problem_start']},
+                                            stop:1 {COLORS['grad_problem_end']});
+                border: 1px solid #BBDEFB;
+                border-radius: 16px;
+                margin-top: 24px;
+                padding: 24px 20px 20px 20px;
+                font-weight: bold;
+                font-size: 16px;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                left: 20px;
+                padding: 6px 16px;
+                color: {COLORS['text_dark']};
+                font-size: 16px;
+                font-weight: bold;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                            stop:0 {COLORS['grad_problem_start']},
+                                            stop:1 {COLORS['grad_problem_end']});
+                border-radius: 8px;
+            }}
+        """)
         layout = QGridLayout(group)
         layout.setSpacing(10)
         
@@ -1325,6 +1414,31 @@ class MainApp(QMainWindow):
     def create_algorithm_group(self, parent_layout):
         """创建算法参数组 - 移除MOSA/VNS迭代次数"""
         group = QGroupBox("⚙️ 算法参数")
+        group.setStyleSheet(f"""
+            QGroupBox {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                            stop:0 {COLORS['grad_algo_start']},
+                                            stop:1 {COLORS['grad_algo_end']});
+                border: 1px solid #FFF9C4;
+                border-radius: 16px;
+                margin-top: 24px;
+                padding: 24px 20px 20px 20px;
+                font-weight: bold;
+                font-size: 16px;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                left: 20px;
+                padding: 6px 16px;
+                color: {COLORS['text_dark']};
+                font-size: 16px;
+                font-weight: bold;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                            stop:0 {COLORS['grad_algo_start']},
+                                            stop:1 {COLORS['grad_algo_end']});
+                border-radius: 8px;
+            }}
+        """)
         layout = QGridLayout(group)
         layout.setSpacing(10)
         
@@ -1388,6 +1502,31 @@ class MainApp(QMainWindow):
     def create_weights_group(self, parent_layout):
         """创建目标权重组"""
         group = QGroupBox("⚖️ 目标权重")
+        group.setStyleSheet(f"""
+            QGroupBox {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                            stop:0 {COLORS['grad_weights_start']},
+                                            stop:1 {COLORS['grad_weights_end']});
+                border: 1px solid #E1BEE7;
+                border-radius: 16px;
+                margin-top: 24px;
+                padding: 24px 20px 20px 20px;
+                font-weight: bold;
+                font-size: 16px;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                left: 20px;
+                padding: 6px 16px;
+                color: {COLORS['text_dark']};
+                font-size: 16px;
+                font-weight: bold;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                            stop:0 {COLORS['grad_weights_start']},
+                                            stop:1 {COLORS['grad_weights_end']});
+                border-radius: 8px;
+            }}
+        """)
         layout = QGridLayout(group)
         layout.setSpacing(10)
         

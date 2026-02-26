@@ -74,8 +74,14 @@ def build_pf_ref(all_objectives: List[np.ndarray]) -> np.ndarray:
     if not all_objectives:
         return np.array([]).reshape(0, 3)
     
+    # 过滤掉空数组
+    non_empty = [obj for obj in all_objectives if len(obj) > 0]
+    
+    if not non_empty:
+        return np.array([]).reshape(0, 3)
+    
     # 合并所有目标点
-    combined = np.vstack([obj for obj in all_objectives if len(obj) > 0])
+    combined = np.vstack(non_empty)
     
     if len(combined) == 0:
         return np.array([]).reshape(0, 3)

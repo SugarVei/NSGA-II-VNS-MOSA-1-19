@@ -26,22 +26,33 @@ def four_matrix_sx_crossover(
     decoder: 'Decoder'
 ) -> Tuple['Solution', 'Solution']:
     """
-    四矩阵交换序列交叉 (SX Crossover, paper-aligned)
+    四矩阵交换序列交叉 (4M-SX Crossover)
 
-    核心思想（与论文描述一致）：
-    1) 随机选择一个工件子集块 \u2112 = {l, l+1, ..., u}（按工件索引形成的连续块）。
-    2) 以 sequence_priority 的“排序签名”作为序列表示，得到两个父代在该块上的排列 π1、π2。
-    3) 构造 swap-path：将 π1 变换到 π2 所需的一系列交换。
-    4) 沿 swap-path 逐步交换“整行四矩阵”，得到过渡子代集合 C，并用 NSGA-II 准则挑选两个输出。
+    严格基于 Guan et al. (2023) 提出的 Swap Crossover (SX, Algorithm 1)，
+    适配到四矩阵编码 (M, Q, V, W) 的多目标调度问题。
 
-    说明：
-    - 这里的“整行交换”指对同一工件 i 的四矩阵行同时交换（M,Q,V,W），保持编码语义一致。
-    - 为降低复杂度，候选集来自两条路径：parent1→parent2 与 parent2→parent1。
+    核心思想：
+    1) 随机选择一个阶段 s。
+    2) 在阶段 s 上，用 argsort(sequence_priority[:, s]) 提取两个父代的
+       工件排列 π_A 和 π_B。
+    3) 构建 swap-path：令 C ← A，逐位对比 π_C 与 π_B，若不同则找到目标
+       元素在 π_C 中的位置并执行交换。每次交换同步修改 C 在阶段 s 上的
+       四矩阵值 (M, Q, V, W)，保持编码语义一致。
+    4) 每次交换后 repair + decode + 评估，将中间解加入候选池。
+    5) 执行双向路径（A→B 和 B→A），收集所有中间解。
+    6) 用非支配排序 + 拥挤度距离从候选池中选出两个最优子代。
+
+    与原始 SX 的关键区别：
+    - 原始 SX 针对单序列编码，本实现适配四矩阵编码。
+    - 交换操作作用于选定阶段的四矩阵列值，而非整行。
+    - 单目标贪心（"better than A"）扩展为多目标候选池选择。
 
     Returns:
         两个子代 (child1, child2)，已 repair 且已 decode。
     """
     n_jobs = int(problem.n_jobs)
+    n_stages = int(problem.n_stages)
+
     if n_jobs <= 1:
         c1, c2 = parent1.copy(), parent2.copy()
         if c1.repair(problem) is None:
@@ -53,42 +64,31 @@ def four_matrix_sx_crossover(
         decoder.decode(c1); decoder.decode(c2)
         return c1, c2
 
-    # ---- block selection ----
-    l = int(rng.integers(0, n_jobs - 1))
-    u = int(rng.integers(l + 1, n_jobs))
-    block = list(range(l, u + 1))
+    # ---- 阶段选择 ----
+    target_stage = int(rng.integers(0, n_stages))
 
-    def signature(sol, job):
-        # 以该 job 在所有阶段的 priority 向量作为签名
-        return tuple(int(x) for x in sol.sequence_priority[job, :])
+    def get_permutation(sol, stage):
+        """提取某阶段上工件的排列（按 sequence_priority 排序）"""
+        priorities = sol.sequence_priority[:, stage]
+        return list(np.argsort(priorities))
 
-    def permutation(sol):
-        return sorted(block, key=lambda j: (signature(sol, j), j))
+    def apply_stage_swap(sol, job_a, job_b, stage):
+        """交换两个工件在指定阶段上的四矩阵值（M, Q, V, W）"""
+        # M: machine_assign
+        sol.machine_assign[job_a, stage], sol.machine_assign[job_b, stage] = \
+            int(sol.machine_assign[job_b, stage]), int(sol.machine_assign[job_a, stage])
+        # Q: sequence_priority
+        sol.sequence_priority[job_a, stage], sol.sequence_priority[job_b, stage] = \
+            int(sol.sequence_priority[job_b, stage]), int(sol.sequence_priority[job_a, stage])
+        # V: speed_level
+        sol.speed_level[job_a, stage], sol.speed_level[job_b, stage] = \
+            int(sol.speed_level[job_b, stage]), int(sol.speed_level[job_a, stage])
+        # W: worker_skill
+        sol.worker_skill[job_a, stage], sol.worker_skill[job_b, stage] = \
+            int(sol.worker_skill[job_b, stage]), int(sol.worker_skill[job_a, stage])
 
-    def swap_path(pi_from, pi_to):
-        cur = pi_from.copy()
-        pos = {job: idx for idx, job in enumerate(cur)}
-        swaps = []
-        for k in range(len(cur)):
-            target_job = pi_to[k]
-            if cur[k] == target_job:
-                continue
-            i = k
-            j = pos[target_job]
-            a, b = cur[i], cur[j]
-            # swap in cur
-            cur[i], cur[j] = cur[j], cur[i]
-            pos[a], pos[b] = j, i
-            swaps.append((a, b))
-        return swaps
-
-    def apply_row_swap(sol, a, b):
-        sol.machine_assign[[a, b], :] = sol.machine_assign[[b, a], :]
-        sol.sequence_priority[[a, b], :] = sol.sequence_priority[[b, a], :]
-        sol.speed_level[[a, b], :] = sol.speed_level[[b, a], :]
-        sol.worker_skill[[a, b], :] = sol.worker_skill[[b, a], :]
-
-    def crowding_distance(sols):
+    def crowding_distance_map(sols):
+        """计算拥挤度距离，返回 {id(sol): cd_value}"""
         if len(sols) <= 2:
             return {id(s): float('inf') for s in sols}
         objs = np.array([s.objectives for s in sols], dtype=float)
@@ -106,7 +106,8 @@ def four_matrix_sx_crossover(
                 cd[order[k]] += (objs[order[k + 1], m] - objs[order[k - 1], m]) / (fmax - fmin)
         return {id(sols[i]): float(cd[i]) for i in range(len(sols))}
 
-    def phi(sol, ref):
+    def phi_score(sol, ref):
+        """加权标量化评分（用于无非支配解时的备选排序）"""
         objs = np.array([s.objectives for s in ref], dtype=float)
         mn = objs.min(axis=0)
         mx = objs.max(axis=0)
@@ -115,44 +116,97 @@ def four_matrix_sx_crossover(
         w = np.array([1/3, 1/3, 1/3], dtype=float)
         return float(np.dot(w, z))
 
-    # ---- generate candidates ----
+    # ---- 沿 swap-path 生成候选解 ----
     candidates = []
 
-    def gen_path(p_from, p_to):
-        pi1, pi2 = permutation(p_from), permutation(p_to)
-        swaps = swap_path(pi1, pi2)
+    def gen_swap_path(p_from, p_to):
+        """
+        SX 核心：从 p_from 逐步变换到 p_to（Guan et al. Algorithm 1 适配版）
+
+        1. C ← p_from.copy()
+        2. 提取 π_C 和 π_target（阶段 target_stage 上的排列）
+        3. 逐位对比：若 π_C[i] ≠ π_target[i]，
+           找到 π_target[i] 在 π_C 中的位置 j，
+           交换 C 中工件 π_C[i] 和 π_C[j] 在阶段 target_stage 的四矩阵值
+        4. 每次交换后 repair → decode → 加入候选池
+        """
+        pi_target = get_permutation(p_to, target_stage)
+
         cur = p_from.copy()
-        # include the starting solution as candidate
+        # 将起点也加入候选池
         cur.objectives = None
-        if cur.repair(problem) is None:
-            return
-        decoder.decode(cur)
-        candidates.append(cur)
-        for (a, b) in swaps:
+        if cur.repair(problem) is not None:
+            decoder.decode(cur)
+            candidates.append(cur)
+
+        pi_cur = get_permutation(cur, target_stage)
+        # 建立"工件 → 当前位置"的反向索引
+        pos = {job: idx for idx, job in enumerate(pi_cur)}
+
+        for i in range(n_jobs):
+            target_job = pi_target[i]
+            current_job = pi_cur[i]
+            if current_job == target_job:
+                continue
+
+            # 找到 target_job 在 π_cur 中的位置 j
+            j = pos[target_job]
+
+            # 交换 π_cur 中位置 i 和 j 的工件
+            job_a = pi_cur[i]  # = current_job
+            job_b = pi_cur[j]  # = target_job
+            pi_cur[i], pi_cur[j] = pi_cur[j], pi_cur[i]
+            pos[job_a] = j
+            pos[job_b] = i
+
+            # 在 cur 的副本上执行四矩阵交换
             nxt = cur.copy()
-            apply_row_swap(nxt, a, b)
+            apply_stage_swap(nxt, job_a, job_b, target_stage)
             nxt.objectives = None
+
             if nxt.repair(problem) is None:
-                break
+                # 修复失败，跳过此步但继续后续交换
+                continue
+
             decoder.decode(nxt)
             candidates.append(nxt)
             cur = nxt
 
-    gen_path(parent1, parent2)
-    gen_path(parent2, parent1)
+    # 双向路径搜索
+    gen_swap_path(parent1, parent2)
+    gen_swap_path(parent2, parent1)
 
-    # 去重（按目标+矩阵哈希的轻量近似）
+    # ---- 去重 ----
     uniq = []
     seen = set()
     for s in candidates:
-        key = (tuple(round(float(x), 6) for x in s.objectives), s.machine_assign.tobytes(), s.sequence_priority.tobytes())
+        key = (tuple(round(float(x), 6) for x in s.objectives),
+               s.machine_assign.tobytes(),
+               s.sequence_priority.tobytes())
         if key in seen:
             continue
         seen.add(key)
         uniq.append(s)
     candidates = uniq
 
-    # ---- select 2 offspring ----
+    # ---- 安全兜底：若候选池为空，返回父代副本 ----
+    if len(candidates) == 0:
+        c1, c2 = parent1.copy(), parent2.copy()
+        if c1.repair(problem) is None:
+            c1 = parent1.copy(); c1.repair(problem)
+        if c2.repair(problem) is None:
+            c2 = parent2.copy(); c2.repair(problem)
+        decoder.decode(c1); decoder.decode(c2)
+        return c1, c2
+
+    if len(candidates) == 1:
+        c2 = parent2.copy()
+        if c2.repair(problem) is None:
+            c2 = parent1.copy(); c2.repair(problem)
+        decoder.decode(c2)
+        return candidates[0], c2
+
+    # ---- 非支配排序 + 拥挤度选择两个子代 ----
     def nondominated_set(sols):
         nd = []
         for s in sols:
@@ -170,22 +224,20 @@ def four_matrix_sx_crossover(
     nd = nondominated_set(candidates)
 
     if len(nd) >= 2:
-        cd = crowding_distance(nd)
+        cd = crowding_distance_map(nd)
         nd_sorted = sorted(nd, key=lambda s: cd.get(id(s), 0.0), reverse=True)
         return nd_sorted[0], nd_sorted[1]
 
-    # nd 只有 0 或 1
     if len(nd) == 1:
         first = nd[0]
         rest = [s for s in candidates if s is not first]
         if not rest:
-            # 极端情况：只有一个候选
             return first.copy(), first.copy()
-        second = min(rest, key=lambda s: phi(s, candidates))
+        second = min(rest, key=lambda s: phi_score(s, candidates))
         return first, second
 
-    # 无非支配：按 φ 最小选前二
-    candidates_sorted = sorted(candidates, key=lambda s: phi(s, candidates))
+    # 无非支配解：按 φ 最小选前二
+    candidates_sorted = sorted(candidates, key=lambda s: phi_score(s, candidates))
     return candidates_sorted[0], candidates_sorted[1]
 
 
