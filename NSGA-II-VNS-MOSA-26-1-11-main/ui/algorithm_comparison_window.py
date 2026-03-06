@@ -671,6 +671,7 @@ class AlgorithmComparisonWindow(QDialog):
         self.worker.log.connect(self.on_log)
         self.worker.finished_result.connect(self.on_finished)
         self.worker.error.connect(self.on_error)
+        self.worker.partial_result.connect(self.on_partial_result)
         
         # 启动计时器
         self.start_time = time.time()
@@ -679,10 +680,12 @@ class AlgorithmComparisonWindow(QDialog):
         self.worker.start()
     
     def cancel_comparison(self):
-        """取消对比试验"""
+        """取消对比试验/暂停汇总"""
         if self.worker:
             self.worker.cancel()
-            self.log_text.append("正在取消...")
+            self.log_text.append("正在暂停并汇总已完成的数据，请稍候...")
+            self.cancel_btn.setEnabled(False)
+            self.task_info_label.setText("🛑 正在汇总已完成的数据...")
     
     def on_progress(self, current: int, total: int, message: str):
         """进度更新"""
@@ -726,6 +729,62 @@ class AlgorithmComparisonWindow(QDialog):
         self.log_text.verticalScrollBar().setValue(
             self.log_text.verticalScrollBar().maximum()
         )
+    
+    def on_partial_result(self, case_no: int, alg_name: str, objectives_list: list):
+        """局部单算法完成后的实时输出"""
+        try:
+            from experiments.taguchi.pareto import build_pf_ref
+            from experiments.taguchi.metrics import compute_all_metrics, get_normalization_info
+            import numpy as np
+            
+            if not objectives_list:
+                return
+                
+            # 过滤空列表
+            valid_objs = [obj for obj in objectives_list if len(obj) > 0]
+            if not valid_objs:
+                return
+
+            # 基于该算法的局部数据建立 PF 和指标
+            pf_ref = build_pf_ref(valid_objs)
+            norm_info = get_normalization_info(pf_ref)
+            f_min, f_max = np.array(norm_info['f_min']), np.array(norm_info['f_max'])
+            hv_ref_point = np.array(norm_info['hv_ref_point'])
+            
+            igd_vals, hv_vals, gd_vals, comp_vals = [], [], [], []
+            weights_arr = np.array([self.w1_spin.value(), self.w2_spin.value(), self.w3_spin.value()])
+            
+            for obj_array in valid_objs:
+                m = compute_all_metrics(obj_array, pf_ref, f_min, f_max, hv_ref_point)
+                igd_vals.append(m['igd'])
+                hv_vals.append(m['hv'])
+                gd_vals.append(m['gd'])
+                comp_vals.append(np.min(obj_array @ weights_arr))
+                
+            # 保存到文件
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            save_dir = os.path.join(project_root, "results", "comparison_results")
+            os.makedirs(save_dir, exist_ok=True)
+            
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            file_name = f"{alg_name}_Case{case_no}_{timestamp}.csv"
+            file_path = os.path.join(save_dir, file_name)
+            
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write("Algorithm,Instance,Run,IGD,HV,GD,Composite\n")
+                for run_idx in range(len(igd_vals)):
+                    f.write(
+                        f"{alg_name},{case_no},{run_idx + 1},"
+                        f"{igd_vals[run_idx]:.8f},"
+                        f"{hv_vals[run_idx]:.8f},"
+                        f"{gd_vals[run_idx]:.8f},"
+                        f"{comp_vals[run_idx]:.8f}\n"
+                    )
+            
+            self.log_text.append(f"💾 {alg_name} (Case {case_no}) 实时结果已保存: {file_name}")
+            
+        except Exception as e:
+            self.log_text.append(f"⚠️ 实时保存失败: {str(e)}")
     
     def on_finished(self, results: dict):
         """试验完成"""

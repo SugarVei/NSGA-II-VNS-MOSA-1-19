@@ -212,6 +212,7 @@ class ComparisonWorker(QThread):
     log = pyqtSignal(str)
     finished_result = pyqtSignal(dict)
     error = pyqtSignal(str)
+    partial_result = pyqtSignal(int, str, list)  # case_no, alg_name, objectives_list
     
     # 算法类映射
     ALGORITHM_CLASSES = {
@@ -562,8 +563,8 @@ class ComparisonWorker(QThread):
                 for future in as_completed(future_to_task):
                     if self._is_cancelled:
                         executor.shutdown(wait=False, cancel_futures=True)
-                        self.log.emit("🛑 试验已中途取消")
-                        return
+                        self.log.emit("🛑 试验已暂停，正在汇总已完成的数据...")
+                        break
                     
                     try:
                         res = future.result()
@@ -599,8 +600,9 @@ class ComparisonWorker(QThread):
                         # 当某个算法在某个算例上的所有运行都完成时，发送汇总信息
                         if alg_run_count == self.runs:
                             self.log.emit(
-                                f"  📊 [{alg_name}] Case {case_no} 全部 {self.runs} 次运行完毕"
+                                f"  📊 [{alg_name}] Case {case_no} 全部 {self.runs} 次运行完毕，正在导出阶段结果..."
                             )
+                            self.partial_result.emit(case_no, alg_name, case_all_objectives[case_no][alg_name])
                         
                         # 每完成一个任务更新一次进度
                         self.progress.emit(current_completed, total_tasks, f"完成 {current_completed}/{total_tasks}")
