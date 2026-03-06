@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Claude 风格全局样式 */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+}
+
+/* 自定义滚动条 — 极简风格 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #D1D1D1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #ABABAB;
+}
+
+/* PDF 渲染容器 */
+.pdf-page-canvas {
+  display: block;
+  margin: 0 auto;
+}
+
+/* 译文绝对定位层 */
+.translation-overlay {
+  position: relative;
+}
+.translation-block {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.92);
+  border-left: 3px solid #D97706;
+  padding: 4px 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #1A1A1A;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+/* 聊天消息样式 */
+.chat-message-user {
+  background: #F5F3EF;
+  border-radius: 1rem 1rem 0.25rem 1rem;
+}
+.chat-message-ai {
+  background: #FFFFFF;
+  border: 1px solid #E8E5E0;
+  border-radius: 1rem 1rem 1rem 0.25rem;
+}
