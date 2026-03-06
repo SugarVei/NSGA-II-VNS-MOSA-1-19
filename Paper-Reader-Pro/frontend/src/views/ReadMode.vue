@@ -26,14 +26,6 @@
           >
             下一页
           </button>
-          <button
-            v-if="!translations[currentPage]"
-            @click="translateCurrentPage"
-            :disabled="translating"
-            class="px-4 py-1.5 text-sm rounded-lg bg-claude-text text-white hover:bg-gray-800 disabled:opacity-50 transition-colors"
-          >
-            {{ translating ? '翻译中...' : '翻译本页' }}
-          </button>
         </div>
 
         <!-- PDF 页面渲染 canvas -->
@@ -49,22 +41,22 @@
       class="flex-1 overflow-y-auto bg-claude-bg p-4"
     >
       <div class="max-w-3xl mx-auto">
-        <!-- 未翻译提示 -->
-        <div v-if="!translations[currentPage]" class="h-full flex items-center justify-center">
+        <!-- 没有数据时的提示 -->
+        <div v-if="!currentPageData" class="h-full flex items-center justify-center">
           <div class="text-center text-claude-text-secondary space-y-2">
-            <p class="text-sm">点击「翻译本页」查看中文译文</p>
-            <p class="text-xs">译文将按段落坐标精准对齐</p>
+            <p class="text-sm">上传 PDF 后自动显示中文译文</p>
+            <p class="text-xs">译文按段落坐标精准对齐</p>
           </div>
         </div>
 
-        <!-- 译文渲染（坐标定位） -->
+        <!-- 译文渲染（基于 BBox 坐标绝对定位） -->
         <div
           v-else
           class="translation-overlay"
           :style="{ height: pageHeight + 'px', width: pageWidth + 'px' }"
         >
           <div
-            v-for="block in translations[currentPage]"
+            v-for="block in translatableBlocks"
             :key="block.block_id"
             class="translation-block"
             :style="{
@@ -82,8 +74,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, nextTick } from 'vue'
-import { translatePage } from '../api'
+import { ref, computed, watch, onMounted } from 'vue'
 import * as pdfjsLib from 'pdfjs-dist'
 
 // 设置 PDF.js worker
@@ -91,6 +82,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs
 
 const props = defineProps({
   filename: String,
+  // paperData 来自 /api/upload_and_parse 的返回值，已包含坐标 + 译文
   paperData: Object,
 })
 
@@ -100,21 +92,28 @@ const pdfCanvas = ref(null)
 
 const currentPage = ref(1)
 const totalPages = ref(0)
-const translating = ref(false)
-const translations = ref({})  // { pageNumber: [translatedBlocks] }
 const pageWidth = ref(0)
 const pageHeight = ref(0)
 
-// PDF.js 文档实例
 let pdfDoc = null
-// 当前页面的原始 PDF 尺寸（用于坐标缩放）
 let originalWidth = 0
 let originalHeight = 0
-// 实际渲染尺寸
 let renderedWidth = 0
 let renderedHeight = 0
 
-/** 坐标缩放：将 PDF 原始坐标映射到实际渲染尺寸 */
+/** 当前页的数据（从 paperData 中提取） */
+const currentPageData = computed(() => {
+  if (!props.paperData?.pages) return null
+  return props.paperData.pages.find(p => p.page_number === currentPage.value)
+})
+
+/** 当前页中有译文的文本块 */
+const translatableBlocks = computed(() => {
+  if (!currentPageData.value) return []
+  return currentPageData.value.blocks.filter(b => b.is_translatable && b.translated)
+})
+
+/** 坐标缩放：PDF 原始坐标 → 实际渲染像素 */
 function scaleX(x) {
   return originalWidth > 0 ? (x / originalWidth) * renderedWidth : x
 }
@@ -125,17 +124,13 @@ function scaleY(y) {
 /** 加载 PDF 文档 */
 async function loadPdf() {
   if (!props.filename) return
-
-  const url = `/api/papers/pdf/${props.filename}`
-  // 尝试从后端获取 PDF；如果没有专用路由，用 uploads 路径
   try {
     pdfDoc = await pdfjsLib.getDocument(`/uploads/${props.filename}`).promise
-  } catch {
-    // 备选：通过后端代理
-    pdfDoc = await pdfjsLib.getDocument(url).promise
+    totalPages.value = pdfDoc.numPages
+    await renderPage(currentPage.value)
+  } catch (err) {
+    console.error('PDF 加载失败:', err)
   }
-  totalPages.value = pdfDoc.numPages
-  await renderPage(currentPage.value)
 }
 
 /** 渲染指定页面到 canvas */
@@ -156,9 +151,11 @@ async function renderPage(pageNum) {
   const canvas = pdfCanvas.value
   canvas.width = viewport.width
   canvas.height = viewport.height
-  const ctx = canvas.getContext('2d')
 
-  await page.render({ canvasContext: ctx, viewport }).promise
+  await page.render({
+    canvasContext: canvas.getContext('2d'),
+    viewport,
+  }).promise
 }
 
 /** 翻页 */
@@ -168,28 +165,16 @@ async function goToPage(page) {
   await renderPage(page)
 }
 
-/** 翻译当前页面 */
-async function translateCurrentPage() {
-  translating.value = true
-  try {
-    const result = await translatePage(props.filename, currentPage.value)
-    translations.value[currentPage.value] = result.translations
-  } catch (err) {
-    console.error('翻译失败:', err)
-  } finally {
-    translating.value = false
-  }
-}
-
 /** 滚动同步：左右面板联动 */
 function syncScroll() {
   if (!pdfContainer.value || !translationContainer.value) return
-  const ratio = pdfContainer.value.scrollTop / (pdfContainer.value.scrollHeight - pdfContainer.value.clientHeight || 1)
-  translationContainer.value.scrollTop = ratio * (translationContainer.value.scrollHeight - translationContainer.value.clientHeight)
+  const scrollable = pdfContainer.value.scrollHeight - pdfContainer.value.clientHeight
+  const ratio = scrollable > 0 ? pdfContainer.value.scrollTop / scrollable : 0
+  const targetScrollable = translationContainer.value.scrollHeight - translationContainer.value.clientHeight
+  translationContainer.value.scrollTop = ratio * targetScrollable
 }
 
 watch(() => props.filename, () => {
-  translations.value = {}
   currentPage.value = 1
   loadPdf()
 })

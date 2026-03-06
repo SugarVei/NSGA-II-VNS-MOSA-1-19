@@ -7,7 +7,7 @@ FastAPI 应用，提供 PDF 解析、翻译、AI 分析等 API 服务。
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.routers import papers, translate, analyze
+from app.routers.api import router as api_router
 import os
 
 app = FastAPI(
@@ -25,10 +25,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 注册路由
-app.include_router(papers.router)
-app.include_router(translate.router)
-app.include_router(analyze.router)
+# 注册统一路由（/api/upload_and_parse + /api/chat + 辅助接口）
+app.include_router(api_router)
 
 
 # 挂载 uploads 目录为静态文件，供前端 PDF.js 直接加载 PDF

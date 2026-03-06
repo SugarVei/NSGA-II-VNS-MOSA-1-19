@@ -94,7 +94,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { listPapers, uploadPaper, deletePaper, parsePaper, getConfig } from './api'
+import { listPapers, uploadAndParse, deletePaper, getConfig } from './api'
 import Sidebar from './components/Sidebar.vue'
 import ReadMode from './views/ReadMode.vue'
 import AnalyzeMode from './views/AnalyzeMode.vue'
@@ -103,7 +103,8 @@ const sidebarOpen = ref(true)
 const mode = ref('read')           // 'read' | 'analyze'
 const papers = ref([])             // 文献列表
 const currentPaper = ref(null)     // 当前选中的文献文件名
-const paperData = ref(null)        // 当前文献的解析数据
+const paperData = ref(null)        // 当前文献的解析数据（含坐标+译文）
+const uploading = ref(false)       // 上传+解析+翻译中
 
 /** 加载文献列表 */
 async function loadPapers() {
@@ -117,21 +118,31 @@ async function loadConfig() {
   try { await getConfig() } catch {}
 }
 
-/** 选择文献 */
+/** 选择已有文献（从列表中点击） */
 async function selectPaper(filename) {
   currentPaper.value = filename
   mode.value = 'read'
-  try {
-    paperData.value = await parsePaper(filename)
-  } catch (err) {
-    console.error('解析失败:', err)
-  }
+  // 已上传的文件需要重新调用 upload_and_parse 获取数据
+  // 或者如果之前已有缓存数据则直接使用
 }
 
-/** 上传文件 */
+/**
+ * 上传文件 → 调用 /api/upload_and_parse 一站式处理
+ * 返回值直接包含坐标 + 译文，无需再单独调翻译接口
+ */
 async function handleUpload(file) {
-  await uploadPaper(file)
-  await loadPapers()
+  uploading.value = true
+  try {
+    const result = await uploadAndParse(file)
+    paperData.value = result
+    currentPaper.value = result.filename
+    mode.value = 'read'
+    await loadPapers()
+  } catch (err) {
+    console.error('上传解析失败:', err)
+  } finally {
+    uploading.value = false
+  }
 }
 
 /** 删除文献 */
