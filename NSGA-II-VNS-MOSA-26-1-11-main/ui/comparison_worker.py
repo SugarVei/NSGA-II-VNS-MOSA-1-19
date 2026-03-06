@@ -536,12 +536,11 @@ class ComparisonWorker(QThread):
             
             # 步骤3：创建并行进程池
             self.log.emit(f"\n🖥️ 步骤3/4: 创建并行进程池")
-            # 限制并行进程数：过多进程会导致资源竞争和进程崩溃
-            # 40个进程适用于高性能服务器（40核+96GB内存）
+            # 限制并行进程数放开：自动检测服务器的所有CPU核心数
             cpu_count = multiprocessing.cpu_count()
-            max_workers = min(cpu_count, 40)  # 最多40个进程
+            max_workers = cpu_count  # 启用全部核心 (适用于80线程服务器)
             self.log.emit(f"  • 检测到 CPU 核心数: {cpu_count}")
-            self.log.emit(f"  • 实际使用进程数: {max_workers} (限制最大40以确保稳定性)")
+            self.log.emit(f"  • 实际使用进程数: {max_workers}")
             self.log.emit(f"  • 正在创建进程池...")
             
             with ProcessPoolExecutor(max_workers=max_workers) as executor:
@@ -667,9 +666,15 @@ class ComparisonWorker(QThread):
                             'gd_mean': np.mean(gd_values), 'gd_std': np.std(gd_values, ddof=1) if len(gd_values) > 1 else 0.0,
                             'composite_mean': np.mean(composite_values), 'composite_std': np.std(composite_values, ddof=1) if len(composite_values) > 1 else 0.0,
                             'n_valid_runs': len(igd_values),
+                            # 保留每次独立运行的原始指标值，用于 Wilcoxon 秩和检验
+                            'igd_values': [float(v) for v in igd_values],
+                            'hv_values': [float(v) for v in hv_values],
+                            'gd_values': [float(v) for v in gd_values],
+                            'composite_values': [float(v) for v in composite_values],
                         }
                     else:
-                        results[case_no][alg_name] = {'igd_mean': float('inf'), 'hv_mean': 0.0, 'gd_mean': float('inf'), 'composite_mean': float('inf'), 'composite_std': 0.0, 'n_valid_runs': 0}
+                        results[case_no][alg_name] = {'igd_mean': float('inf'), 'hv_mean': 0.0, 'gd_mean': float('inf'), 'composite_mean': float('inf'), 'composite_std': 0.0, 'n_valid_runs': 0,
+                                                      'igd_values': [], 'hv_values': [], 'gd_values': [], 'composite_values': []}
             
             self.log.emit("\n=== 多进程加速试验全部完成 ===")
             self.finished_result.emit(results)

@@ -1,0 +1,363 @@
+[P0] [Heading 1] 1. 引言 (Introduction)
+[P1] [Normal] 混合流水车间（Hybrid Flow Shop, HFS）广泛存在于半导体制造、机械加工与化工生产等场景，其调度优化对于提升企业生产效率具有重要意义(Neufeld et al., 2023)。在实际制造环境中，受工件族切换、刀具更换或设备清洗等因素影响，工序间的准备时间通常具有序列依赖性（Sequence-Dependent Setup Times, SDST）。忽略SDST，将导致调度方案与实际执行产生显著时间偏差，从而降低生产系统的可预测性与稳定性(Li et al., 2023; Cai et al., 2022)。与此同时，随着"工业4.0"的深化以及全球"双碳"战略的推进，制造业正面临从传统效率驱动向绿色、可持续生产模式的深刻转型(Khan et al., 2025; Zahid et al., 2024)。因此，将能耗或碳排放作为关键优化目标的绿色调度已成为制造企业在运营层面必须纳入考量的关键约束(Guerrero et al., 2025; Yue et al., 2025)。
+[P2] [Normal] 然而，在HFSP-SDST这一特定问题域中，人力因素的系统性集成仍然不足。在现代制造业中，人力资源已不再是简单的劳动力，而是具备不同技能水平、能够直接影响生产节拍与能源效率的核心因素(Gong et al., 2020)。工人技能等级的差异化、劳动力成本的持续攀升以及高技能人才的短缺，共同构成了当前制造企业在运营层面必须应对的严峻挑战(Ostovari et al., 2024; Nasirian et al., 2025)。
+[P3] [Normal] 然而，现有研究在处理这一问题时存在明显的局限性。多数文献将机器调度与人员排班（Worker Assignment）视为两个相互独立的子问题，忽略了两者的内在联系(Delgoshaei et al., 2023)。即便有部分研究已考虑到类似的问题，也往往做出过于简化的假设(Barak et al., 2024a; Bahroun et al., 2024)。一个被普遍忽视的核心机制是：工人的技能水平直接决定了其能够操作的机器加工速度，而不同的加工速度对应着不同的机器功率、加工时长，并最终导致能耗与碳排放的显著差异(Li et al., 2025)，忽略这个重要因素，调度方案虽在技术上可行，但在经济与环境效益上往往是次优的。
+[P4] [Normal] 综上所述，本文的主要贡献可归纳如下：
+[P5] [Normal] （1）构建了一个针对HFSP-SDST的混合整数线性规划（MILP）模型，该模型考虑了多技能工人分配、可变加工速度和全周期人力成本；
+[P6] [Normal] （2）设计了人机匹配的“向下兼容”机制。允许高技能工人在非瓶颈工序中以较低速度作业，以平衡能耗与效率；
+[P7] [Normal] （3）提出了一种基于四矩阵一体化编码（M, Q, V, W）的混合NSGA-II-VNS-MOSA算法，以协同优化最大完工时间、总人力成本和总能耗；
+[P8] [Normal] （4）在 14 组不同规模实例与真实案例上进行对比与消融实验，展示所提框架在收敛性与解集分布上的改进（指标采用 IGD/GD/HV）
+[P9] [Normal] 本文其余部分组织如下：第2节回顾了相关文献。第3节建立了考虑人机耦合的HFSP-SDST多目标优化模型。第4节描述了一种新型的混合NSGA-II-VNS-MOSA算法。第5节对所提出的模型和算法进行了性能评估。第6节给出了结论和未来工作。
+[P10] [Heading 1] 2. 文献综述 Literature review
+[P11] [Normal] 鉴于本文聚焦于考虑多技能工人的HFSP-SDST问题，本节将从以下三个维度对现有文献进行系统梳理：涉及SDST的HFSP问题、考虑工人技能水平的调度问题以及用于求解此类复杂多目标优化问题的元启发式算法，重点涵盖NSGA-II、变邻域搜索（VNS）与模拟退火（SA）的应用现状。在此基础上，2.4节将通过文献对比精准定位本文的研究空白。
+[P12] [Heading 2] 2.1. 考虑序列依赖设置时间的混合流水车间调度(HFSP with SDST)
+[P13] [Normal] 混合流水车间调度问题（Hybrid Flow Shop Scheduling Problem, HFSP）作为经典流水车间调度的扩展，因其在电子制造、汽车装配及化工生产等领域的广泛应用而备受学术界关注。在实际生产环境中，工件切换导致的序列依赖设置时间（Sequence-Dependent Setup Times, SDST）是影响调度效率的关键因素。Li等(Li et al., 2023)指出，忽略SDST会导致调度方案在实际执行中产生显著的时间偏差，并构建了考虑SDST的多目标能效调度模型。Hidri(Hidri, 2024)探讨了包含滞后时间、卸载时间及SDST的多阶段复杂HFSP问题，证明了精确刻画设置时间对降低最大完工时间具有决定性作用。Luan等(Luan et al., 2023)则引入模糊相关熵理论来处理生产过程中的不确定性，进一步提升了调度方案的鲁棒性。
+[P14] [Normal] 近年来，研究重点已从单一的时间目标转向集成能效、成本与效率的多目标优化。Wang等(Wang et al., 2023)研究了考虑SDST的分布式混合流水车间调度，通过改进的元启发式算法实现了完工时间与能耗的协同优化。Cai等(Cai et al., 2024)在NSGA-II框架下引入了能效评价指标，探讨了SDST对总能耗的影响。Tian等(Tian et al., 2025)针对缺失工序的HFSP问题，提出了高效的启发式算法，并验证了SDST在复杂约束下的重要性。Meng等(Meng et al., 2020)通过建立混合整数线性规划（MILP）模型，对比了不同SDST约束对调度结果的敏感性。此外，Sun等(Sun et al., 2023)探讨了带有阻塞约束的分布式混合流水车间调度，Zhang等(Zhang et al., 2023)研究了随机环境下的SDST调度问题，利用模拟退火算法提升了系统的抗干扰能力，而Zanjani等(Zanjani et al., 2021)则从鲁棒优化的角度，分析了SDST波动对多目标调度前沿的影响。
+[P15] [Normal] 尽管上述研究已对HFSP-SDST的不同变体进行了广泛探讨，但一个共同的局限在于对人力资源的简化处理。多数模型将劳动力假设为同质化、充足且被动附属于机器的资源，而未能充分刻画工人技能差异及其与机器运作之间的内在关联。这一简化虽降低了模型复杂度，却也使得调度方案与高度依赖熟练工人的现代制造业场景产生了显著脱节。因此，在HFSP-SDST框架下系统性地引入工人技能约束，是提升调度模型现实指导意义的关键方向。
+[P16] [Heading 2] 2.2. 考虑多技能工人的双资源约束调度(DRC Scheduling with Multi-skilled Workers)
+[P17] [Normal] 随着制造业向柔性化与智能化转型，双资源约束（Dual-Resource Constrained, DRC）(Nelson, R.T.,1968)调度成为研究热点，其中多技能工人（Multi-skilled Workers）的合理分配是提升系统柔性和应对需求波动的的关键手段。Katiraee等(Katiraee et al., 2021)通过系统性文献综述指出，工人的技能差异、学习效应及疲劳度对加工时间和生产质量具有显著影响。Gao等(Gao et al., 2024)在HFSP背景下研究了多技能工人与疲劳因素的交互作用，提出基于智能体的仿真优化方法。Yu等(Yu et al., 2024)进一步将工人资源引入分布式装配混合流水车间，建立了技能水平与加工速度之间的映射模型。Mlekusch等(Mlekusch et al., 2025)针对再入式柔性流水车间，探讨了多技能工人在不同阶段间的动态指派问题。
+[P18] [Normal] 在DRC调度中，工人的流动性与技能水平直接决定了生产线的平衡与效率。Annear等(Annear et al., 2023)研究了作业车间中多技能工人的动态指派，强调了工人柔性在应对需求波动时的重要性。Barak等(Barak et al., 2024b)探讨了分布式混合流水车间中多技能工人的分配问题，提出了集成优化模型。Seifi等(Seifi & Zimmermann, 2021)在钾肥矿山调度背景下，分析了多技能工人对复杂混合流水车间效率的提升作用。Tótha等(Totha & Korytkowski, 2021)则关注了考虑疲劳因素的多技能工人调度，利用改进的进化算法实现了效率与工人福祉的平衡。Walter等(Walter & Zimmermann, 2021)研究了提前期不确定性下的多技能工人规划，验证了工人柔性对降低系统风险的贡献。此外，Li等(Li et al., 2023)探讨了复杂产品装配中的多技能工人调度，提出了多目标协同优化框架。
+[P19] [Normal] 上述有DRC的研究充分证实了将工人作为一种有限动态资源进行调度的重要价值。然而，这些研究在机器环境的刻画往往有所简化，鲜有文献将多技能工人模型与HFSP-SDST这一特定的复杂问题进行关联。特别是工人技能等级如何驱动可变加工速度，进而通过加工时间时间与机器功率的变化影响生产效率与能耗这类问题，在现有文献中尚未被系统性建模与求解。
+[P20] [Heading 2] 2.3. 用于求解多目标调度问题的元启发式算法(Metaheuristic Algorithms for Multi-objective Scheduling)
+[P21] [Normal] 由于本文所研究的问题具有NP-hard特性，精确算法难以在合理时间内求解中大规模实例，因此元启发式算法成为主流选择。本文提出的混合算法融合了NSGA-II、VNS和MOSA三种机制，本节将分别回顾这三种方法在调度领域的应用现状，以论证混合策略的合理性与必要性。
+[P22] [Heading 3] 2.3.1 NSGA-II在多目标调度中的应用
+[P23] [Normal] NSGA-II由Deb等人提出(Deb et al., 2000)，是一种基于遗传算法（GA）的强大的决策空间探索引擎，凭借其在维持解集多样性和收敛性的出色表现，已被广泛应用于调度问题、分配问题、旅行商问题（TSP）、配送问题、背包问题和车辆路径问题（VRP）等领域。
+[P24] [Normal] 在HFSP领域，NSGA-II得到了广泛应用与改进。Wang等(Wang et al., 2023)提出了一种结合Q-learning与全局变邻域搜索（GVNS）的改进型NSGA-II，显著增强了算法跳出局部最优的能力。Chen等(Chen et al., 2023)针对钢铁生产中的多目标调度问题，引入知识驱动机制改进NSGA-II的交叉与变异算子。Lv等(Lv et al., 2023)则将局部搜索算子集成至NSGA-II框架中，用于处理包含库存成本、误期惩罚及完工时间在内的复杂目标体系。针对算法的分布性与收敛性，Luan等(Luan et al., 2023)利用模糊相关熵改进了NSGA-II的拥挤距离计算，以提升解的分布均匀性。Sun等(Sun et al., 2024)针对分布式异构混合流水车间，提出了改进的NSGA-II算法以处理阻塞约束。Bouazza等(Bouazza et al., 2024)将离散事件仿真与NSGA-II集成，解决了复杂HFSP中的随机调度问题。Thakur等(Thakur et al., 2024)在冷链物流调度中应用了带有混合染色体编码的NSGA-II，展示了其在多维决策空间中的优越性。Yeh等(Yeh & Chen, 2023)结合NSGA-II与TOPSIS方法，实现了混合流水车间制造网络可靠性的多目标评估。Feng等(Feng et al., 2023)探讨了并行顺序移动模式下的多目标HFSP，利用改进的NSGA-II优化了设置时间与完工时间。Missaoui等(Missaoui & Hidri, 2026)在两阶段无等待HFSP中应用NSGA-II，实现了完工时间与能耗的帕累托优化。
+[P25] [Normal] 然而，标准NSGA-II也存在固有局限。其一，它主要依赖遗传算子（交叉与变异）的随机搜索进行全局探索，局部开发能力相对薄弱，在面对本文所研究的高度约束、多维决策空间时，容易陷入局部最优前沿。其二，其拥挤距离排序机制在处理三目标及以上的复杂Pareto前沿形态时，可能导致解的分布不均匀，计算复杂性也相应增高 (Yue et al., 2025)。
+[P26] [Heading 3] 2.3.2 变邻域搜索(VNS)在调度中的应用
+[P27] [Normal] 变邻域搜索（Variable Neighborhood Search, VNS）是由Mladenović和Hansen（Mladenović & Hansen, 1997）提出的一种元启发式算法，其核心思想是通过系统性地切换多种邻域结构来探索解空间，即一个解在某个邻域结构下可能是局部最优的，但在另一个邻域结构下仍可能存在改进空间。VNS凭借其强大的局部搜索能力和结构化的邻域切换机制，在组合优化问题中表现出色。
+[P28] [Normal] 在调度领域，VNS已被广泛用于强化搜索质量。Cai等(Cai et al., 2022)提出了协作式VNS（CVNS），用于求解带有SDST的分布式两阶段混合流水车间问题，验证了多邻域协作策略在处理SDST约束时的有效性。Li等(Li et al., 2022)设计了基于学习和群体的多目标VNS（LS-MOVNS），用于同时最小化HFSP的最大完工时间和总流程时间。Yuan等(Yuan et al., 2026)提出了自适应VNS进化算法（AVNSEA），用于求解带有一致子批的HFSP，展示了VNS在处理批量约束时的灵活性。
+[P29] [Normal] 更为重要的是，将VNS嵌入其他进化算法框架中形成混合算法，已被证明是一种有效的策略。Asefi等(Asefi et al., 2014) 将VNS与NSGA-II结合，用于求解双目标无等待柔性流水车间问题，实验表明混合算法在收敛性和多样性上均优于单一的NSGA-II。这证明VNS可以作为一种强大的局部搜索工具，有效弥补NSGA-II局部搜索能力的不足。Behnamian等(Behnamian et al., 2009)则将ACO、SA和VNS三种算法进行混合，用于求解带有SDST的并行机调度问题，进一步验证了多算法混合在处理SDST约束时的优越性。
+[P30] [Heading 3] 2.3.3模拟退火(SA)在调度中的应用
+[P31] [Normal] 模拟退火（Simulated Annealing, SA）是一种基于物理退火过程的概率性搜索算法(Kirkpatrick et al., 1983)。其核心特征在于通过Metropolis准则以一定概率接受劣解，从而赋予算法跳出局部最优陷阱的能力。在调度领域，SA的应用历史悠久且成果丰硕。在多目标优化领域，SA被扩展为多目标模拟退火（Multi-Objective Simulated Annealing, MOSA）。Varadharajan和Rajendran (Varadharajan & Rajendran, 2005) 较早地将MOSA应用于排列流水车间调度问题，以同时最小化完工时间和总流程时间，验证了其在多目标环境下的有效性。Hajji等 (Hajji et al., 2024) 应用SA解决了带有专用机、可用日期和交付时间等复杂约束的HFSP问题。Zhang等 (Zhang et al., 2023) 则将遗传算法与SA融合，用于求解随机环境下的生产调度问题，利用SA的概率接受机制提升了系统的抗干扰能力。
+[P32] [Normal] SA的优势在于其灵活的框架和强大的全局探索能力，但其性能高度依赖于参数设置（如初始温度、冷却速率），且在搜索后期收敛速度可能较慢。因此，将SA与其他具有强局部搜索能力的算法（如VNS）进行混合，是当前研究的主流趋势。Behnamian等 (Behnamian et al., 2009) 的研究表明，VNS可以为SA提供高质量的邻域搜索方向，而SA的Metropolis准则则为VNS提供了跳出局部最优的"逃逸"机制，两者具有天然的互补性。Stamadianos等 (Stamadianos et al., 2023) 同样将SA与VNS进行混合，验证了这种组合在求解复杂组合优化问题时的鲁棒性。
+[P33] [Normal] 综合上述分析，NSGA-II擅长全局种群进化与多目标解集管理，但局部搜索能力不足；VNS擅长通过多邻域结构进行深度局部开发，但缺乏全局视野和跳出深层局部最优的机制；SA/MOSA则通过概率接受准则提供了有效的跳出局部最优的能力。三者在搜索策略上的互补性，构成了本文提出NSGA-II-VNS-MOSA混合算法的理论基础。
+[P34] [Heading 2] 2.4 研究空白 （Research Gap）
+[P35] [Normal] 为了更清晰地定位本文的研究，我们对相关核心文献从问题类型、是否考虑SDST、是否考虑工人技能、优化目标及求解方法五个维度进行了系统梳理，详见表1。
+[P36] [图表样式] Table 1 Comparative summary of related literature
+[P37] [Normal] 通过上述文献回顾与对比分析，我们可以发现当前研究中存在以下研究空白：
+[P38] [Normal] （1）问题建模的空白：如表1所示，现有HFSP-SDST研究（表中上半部分）普遍忽略了工人技能因素，而考虑多技能工人的DRC调度研究（表中下半部分）则鲜有在HFSP-SDST这一特定复杂框架下展开。特别是，考虑工人技能与机器速度之间的关系，从而影响能耗与效率这一方面，在现有文献中尚未被系统性地建模。这意味着现有模型无法确定"由谁来操作、以何种速度运行"这一核心决策对生产效率、人力成本和能源消耗的影响。
+[P39] [Normal] （2）求解方法层面的空白：尽管NSGA-II在HFSP领域应用广泛，但其固有的局部搜索能力不足问题在面对本文所研究的高维、强约束问题时尤为突出。现有的混合策略（如NSGA-II+VNS或SA+VNS）已在简化问题上展示了优越性，但尚未有研究将NSGA-II的全局种群进化、VNS的多邻域深度搜索与MOSA的概率跳出机制进行三重融合，以协同应对HFSP-SDST中由人机耦合带来的超大规模、多约束的解空间。
+[P40] [Normal] 故本文提出了一种基于特定编码的混合NSGA-II-VNS-MOSA算法，以协同优化最大完工时间、总人力成本和总能耗。
+[P41] [Heading 1] 3. 问题描述与符号定义 Problem description and model proposal
+[P42] [Heading 2] 3.1. Framework of Electric Oven Manufacturing问题描述
+[P43] [Normal] 本文研究的电烤炉制造的生产调度流程如图1所示。该案例来源于一家中国制造工厂，该工厂接受一批电烤炉订单后，会将每个订单分解为不同的生产任务，而每一个生产任务需要生产不同种类与数量的零件。在图1中，不同颜色的方块代表不同类型的零件。而每一个零件的生产过程都会经过三个连续的阶段：电路板表面贴装技术（SMT）、电子元件插件（DIP）和最终组装。在每个阶段，都部署了多台具有异构能力的并行机，每一台机器都由一位工人进行操作，且生产不同的机器时需要进行换模操作。
+[P44] [Normal] 特别地，不同工人的技术水平是不同的，而不同的技术水平可以让这些机器在不同的加工速度下运行，且一个关键的特征是工人的技能水平拥有向下兼容的特性，即高等级的工人也可以操作机器以低等级的速度生产工件，这直接影响生产率和能源消耗，因此在每台机器上每个任务的加工时间都取决于工人的技能水平、机器加工速度与需要加工的工件数量。
+[P45] [Normal] 生产系统平台通过将从订单中提取的任务信息与工厂中可用的工人与机器数据相结合，推导出最优调度方案。然后通过调度算法和决策方法确定最优调度方案，使业务经理能够及时响应车间情况，同时及时交付订单与执行调度方案。
+[P46] [Normal] 
+[P47] [图表样式] 图1 电烤炉制造的生产调度框架
+[P48] [图表样式] Fig.1 Production scheduling framework for electric oven manufacturing
+[P49] [Heading 2] 3.2. SDST-HFSP definition 定义
+[P50] [Normal] 本文研究的问题可被形式化地定义为一个带有可变加工速度和技能工人分配的多目标SDST-HFSP。本文所研究的HFSP-SDST问题可描述如下：设有包含个工件的集合以及包含个阶段的集合。所有工件均需在各个阶段按工艺顺序进行加工，且至少有一个阶段包含两台或以上的并行机器。与传统调度模型不同，本研究引入了多技能工人（Multi-skilled Workers）与可变加工速度（Variable Processing Speeds）的约束。系统配备不同技能等级的工人，机器的加工速度等级与工人的技能水平存在非线性映射关系，且遵循“向下兼容”机制，即高技能工人可操作低速度要求的工序 。
+[P51] [Normal] 选择不同的机器、加工速度及对应等级的工人，会导致加工时间、人力成本及能源消耗的显著差异。此外，工序间的换模时间取决于工件的加工序列（SDST）。该问题的核心在于同时确定工件的机器分配、加工顺序、加工速度等级以及各工序的工人指派，以满足三项相互冲突的效率准则：以最大完工时间（Makespan,）衡量的生产效率、以全周期工资支出衡量的总人力成本（），以及涵盖加工、准备、空闲及辅助能耗的总能源成本（）。
+[P52] [Heading 2] 3.3. The MILP model
+[P53] [Normal] 针对上述SDST-HFSP问题，本文建立了一个混合整数规划（MILP）模型，以权衡最大完工时间、人力成本与能源成本。同时为了便于MILP求解，表2对模型提出了以下假设。表3给出了所使用的参数和决策变量。
+[P54] [图表样式] 表2 SDST-HFSP的必要假设
+[P55] [图表样式] Table 2 Necessary assumptions of SDST-HFSP.
+[P56] [图表样式] 表3 参数与决策变量
+[P57] [图表样式] Table 3 Parameters and decision variables.
+[P58] [Normal] 对于SDST-HFSP的数学模型，开发了混合整数线性规划（MILP）模型来平衡最大完工时间、人工成本和能耗成本。为了建立目标函数，本文详细说明了电烤炉制造的三个目标函数的计算公式。
+	（1）最大完工时间Z1：表示所有工件在所有阶段完成加工的最晚时间点。
+[P59] [Normal] 
+[P60] [Normal] （2）最小化人力成本：表示所有工人在生产过程中需支付的工资。
+[P61] [Normal] 
+[P62] [Normal] （3）最小化总能耗：由加工能耗（PE）、准备能耗（SE）、空闲能耗（IE）、运输能耗（TE）及辅助能耗（AE）五部分组成 。
+[P63] [Normal] 
+[P64] [图表样式] 表3 总能耗的组成
+[P65] [图表样式] Table 3 Components of total energy consumption
+[P66] [Normal] 其中为机器总占用时长，为机器总加工时间，为机器总准备时间。其计算公式如下：
+[P67] [Normal] 
+[P68] [Normal] 
+[P69] [Normal] 
+[P70] [Normal] 约束条件：
+
+[P71] [Normal] 
+[P72] [Normal] 
+[P73] [Normal] 
+[P74] [Normal] 
+[P75] [Normal] 
+[P76] [Normal] 
+[P77] [Normal] 
+[P78] [Normal] 
+[P79] [Normal] 
+[P80] [Normal] 
+[P81] [Normal] 
+[P82] [Normal] 
+[P83] [Normal] 
+[P84] [Normal] 
+[P85] [Normal] 
+[P86] [Normal] 
+[P87] [Normal] 
+[P88] [Normal] 式（7）定义了每个工件的每道工序必须分配给一台特定的机器，并选定唯一的加工速度。式（8）与式（9）规定了人机耦合关系：前者确保每台机器在当前调度周期内最多指派一名工人，且仅在机器被激活执行任务时才进行配工；后者则保证任何被分配加工任务的机器必须配备相应的操作人员。式（10）刻画了技能-速度的向下兼容（Skill-Speed Downward Compatibility）约束，即机器的运行速度等级不得高于操作工人的技能等级，体现了高技能工人对低速工况的覆盖能力。式（11）为劳动力资源可用性约束，确保各等级工人的实际指派数量不超过工厂现有的资源储备。式（12）描述了工序间的工艺顺序与运输约束，规定工件在当前阶段的开始时间必须晚于其在前一阶段的完成时间与跨阶段运输时间之和。式（13）则描述了同一机器上相邻任务的时间衔接关系，明确了工件的开始时间受制于前序工件的完工时刻及序列依赖设置时间（SDST）。式（14）维持了工件在机器间的流平衡。式（15）明确了工序完成时间与开始时间及实际加工时长之间的线性关系。式（16）规定了最大完工时间的计算准则，确保其不早于所有工件在最终阶段的完成时刻。式（17）为运输决策变量的线性化约束，确保运输行为与机器分配决策保持逻辑一致。最后，式（18）至（24）定义了决策变量的取值范围、非负约束以及机器开机与关机时间的逻辑判定准则。
+[P89] [Normal] 
+[P90] [Heading 1] 4. Proposed Hybrid Multi-Objective Evolutionary Algorithm提出的混合多目标演化算法
+[P91] [Normal] 带有工人技能约束和序列依赖设置时间（SDST）的混合流水车间调度问题（HFSP）是一个NP-hard问题。此类问题的特点在于其双重复杂性：不仅需要在多个阶段为工件排序并分配到合适的机器，还必须对有限且技能水平异构的劳动力进行优化分配。这些决策之间的相互依赖性与错综复杂的关系，将该问题提升到了一个显著的组合优化难度，导致传统精确算法在处理实际工业规模的算例时计算上不可行。因此，开发高效且有效的元启发式方法至关重要。
+[P92] [Normal] 为解决这一复杂的多目标优化问题，本研究提出了一种新颖的混合多目标进化算法，下文称之为NSGA-II-VNS-MOSA算法。该算法的核心理念是协同地平衡遗传算法的全局搜索能力与局部开发能力。具体而言，该算法融合了非支配排序遗传算法II（NSGA-II）、变邻域搜索（VNS）机制以及一个多目标模拟退火（MOSA）精炼阶段的优势，旨在有效地导航广阔而复杂的解空间，在避免陷入局部最优的同时，获得更好的帕累托前沿。
+[P93] [Heading 2] 4.1. Main Contributions主要贡献
+[P94] [Normal] 四矩阵编码策略：设计了一种结构化的编码机制来表示一个完整的调度解。该方案利用四个独立的矩阵，分别为工件排序矩阵、机器分配矩阵、加工速度等级矩阵和工人技能分配矩阵。这种结构化的表示方法便于设计针对特定问题的遗传算子，并确保了算法搜索空间与问题域之间的整体映射。
+[P95] [Normal] 混合初始化策略：为了建立一个高质量的初始种群，提出了一种混合策略。该方法结合了随机生成解和由改进的、为序列依赖设置时间量身定制的NEH启发式规则（NEH-SDST）生成的解。这为演化搜索提供了一个优越的起点，加速了向解空间中可行解区域的收敛。
+[P96] [Normal] 先进的序列交换（SX）交叉算子：开发了一种复杂的交叉算子，称为序列交换（SX），以有效地重组父代解。SX算子识别两个父代之间不同的序列块，并生成一个由原子交换操作构成的路径，随后通过在该路径上创建中间解的候选池并从中选择最有希望的子代。
+[P97] [Normal] 两阶段混合搜索架构： 该算法采用独特的两阶段结构。在第一阶段，执行标准的NSGA-II以生成一个充分多样化的非支配解集。在第二阶段，该解集被用来初始化一个多目标模拟退火（MOSA）框架，该框架智能地采用变邻域搜索（VNS）模块作为其扰动机制。这种架构策略性地利用NSGA-II的全局搜索来识别有希望的区域，然后利用VNS-MOSA组合进行密集的局部精炼并逃离局部帕累托前沿。
+[P98] [Normal] 多约束可行性修复机制：由于交叉与变异可能会产生不可行解，这些解会影响算法最终解的性能，故设计出针对新解的可行性修复机制，以确保所有生成的解都满足问题的复杂约束条件。
+[P99] [Heading 2] 4.2. Solution Representation and Decoding Strategy (解的表示与解码)
+[P100] [Heading 3] 4.2.1. Four-Matrix Encoding Scheme (四矩阵编码)：
+[P101] [Normal] 为便于完整刻画调度方案，本文采用一种四矩阵联合编码机制。该机制以工序Oij为基本单元，通过四个相互独立但语义互补的矩阵同步表示关键决策，如下图2所示。
+[P102] [Normal] 机器分配矩阵（）
+[P103] [Normal] 为整数矩阵，其中元素表示工件在阶段被分配的并行机器编号，该取值来自阶段的可用机器集合。该矩阵直接决定各操作的加工资源选择。
+[P104] [Normal] 序列优先级矩阵（）
+[P105] [Normal] 为优先级矩阵，其中为操作的数值优先级。解码时，对任一阶段的任一机器，其被分配的工件按优先级值升序排序以生成加工序列。相较于直接排列编码，基于优先级的间接表示具有更高的灵活性，并能降低遗传算子作用下对可行结构的破坏性。
+[P106] [Normal] 速度等级矩阵（）
+[P107] [Normal] 为整数矩阵，存储为操作选择的离散加工速度等级索引。该决策将同时影响加工时长与能耗水平，是连接“时间—能耗”权衡的核心变量。
+[P108] [Normal] 工人技能矩阵（）
+[P109] [Normal] 为整数矩阵，表示执行操作的工人技能等级。该矩阵用于刻画人力资源约束：其取值需与所选速度等级相容，并满足全局工人可用性与一致性要求。为保证可行性， 
+[P110] [Normal] 
+[P111] [图表样式] 图2 四矩阵编码示意图
+[P112] [图表样式] Fig 2. Four-matrix encoding diagram
+[P113] [Heading 3] 4.2.2. Decoding Procedure with Constraints (带约束的解码)：
+[P114] [Normal] 解码过程 为将四元组编码转化为可行的物理调度方案，本文设计了一种包含三个步骤的解码机制，以协同处理机器分配、工序排序及资源配置等多维决策。
+[P115] [Normal] 步骤1：根据矩阵将每一道工序分配至阶段的特定机器。同时，依据矩阵和确定该工序的加工速度模式与操作工人等级，从而锁定其实际加工时间与对应的人力成本 。
+[P116] [Normal] 步骤2：对于任意机器，提取所有分配至该机器的工序集合。随后，依据矩阵中的优先级键值（Priority Key）对集合进行非减排序，将连续的实数编码转化为确定的加工序列。
+[P117] [Normal] 步骤3：在满足工艺优先约束、序列依赖设置时间（SDST）及机器可用性约束的前提下，推导每道工序的最早开始时间与完工时间，最终生成相对应的调度方案。
+[P118] [Normal] 我们以3工件、3阶段（每阶段2台平行机）以及3种工人技能等级为例进行解码演示，下图3与图4为四矩阵编码与解码得到的调度甘特图。
+[P119] [Normal] 
+[P120] [图表样式] 图3 四矩阵解码示意图
+[P121] [图表样式] Fig 3. Four-matrix decoding diagram
+[P122] [Normal] 
+[P123] [图表样式] 图4 调度甘特图
+[P124] [图表样式] Fig 4. Scheduling Gantt Chart
+[P125] [Heading 2] 4.3. Problem Complexity and Algorithm Overview (算法综述)
+[P126] [Normal] 本文提出的NSGA-II-VNS-MOSA算法运行时会经过两个阶段，第一阶段采用NSGA-II算法广泛探索解空间，并识别出一组多样且高质量的非支配解。第二阶段通过在MOSA框架中引入基于VNS（Variable Neighborhood Search）的多邻域搜索算子对该非支配解集进行局部探索。为增强局部探索效果并提高解的质量，本研究引入了8种领域搜索策略，分为单工序邻域搜索、工件级邻域搜索与机器序列邻域搜索三大类型。随后使用Metropolis接受规则对邻域搜索得到的新解进行判断是否接受，从而获得更好的AP集和RP集，获取最优生产调度方案。其总体流程图与伪代码如下所示。
+[P127] [Normal] 
+[P128] [Normal] 
+[P129] [图表样式] 图5 算法流程图
+[P130] [图表样式] Fig 5. Algorithm Flowchart
+[P131] [Heading 2] 4.4. Population Initialization (种群初始化)
+[P132] [Normal] 初始种群的构建需在解空间探索与局部开发之间取得严格平衡。为此，本文设计了混合初始化策略来生成规模为的初始种群。其中，的个体通过纯随机方式生成以保证基因多样性，剩余个体则采用本文扩展的NEH-SDST启发式算法生成，在本文中N=50，以提升初始解的质量与多样性。
+[P133] [Normal] （1）随机生成策略：对于种群中的个体，其机器分配()、速度等级()与工人技能(矩阵均从各自的有效可行域中进行均匀随机采样；序列优先级矩阵()则在区间内随机生成。此机制确保了算法在搜索初期的全局覆盖能力。
+[P134] [Normal] （2）基于NEH-SDST的启发式生成策略：经典的 NEH 算法主要针对单一目标，本文将其进行多维拓展，以适应序列相关设置时间（SDST）及速度与工人技能耦合的复杂约束。剩余的个体严格按以下步骤生成：
+[P135] [Normal] Step 1：假定所有操作均采用平均加工速度，计算各个工件在所有阶段的累计加工时间。将工件按总加工时间降序排列，生成初始作业序列。
+[P136] [Normal] Step 2：从序列中取出首个工件放置于调度的首位。随后，逐一取出中的后续工件，尝试将其插入到当前已排定部分序列的所有可能候选位置中。
+[P137] [Normal] Step 3：评估各候选位置时，计算目标增量。该增量不仅包含当前工序的加工时间，还必须严格计入插入位置处与前序、后序工件之间产生的序列相关换模时间（SDST）。
+[P138] [Normal] Step 4：选定使得部分序列完工时间最小化的最优插入位置后，采用贪婪子启发式规则确定其他决策变量：优先分配能使该工序最早完工的机器；在不延误当前阶段完工时间的前提下，贪婪地分配能耗最低的加工速度等级，并严格匹配满足该速度下界的最低等级（最经济）工人技能。
+[P139] [Normal] Step 5：重复执行步骤2至步骤4，直至序列 $L$ 中的所有工件均被成功分配，输出完整的初始个体解。
+[P140] [Heading 2] 4.5. Genetic Operators (遗传算子)
+[P141] [Normal] 针对涉及工人技能与加工速度等众多约束的SDST-HFSP问题，本研究设计了一种混合交叉策略，旨在平衡种群的全局探索能力（Exploration）与局部开发能力（Exploitation）。本文将Guan等人(Guan et al., 2023)所提出的SX算子与本研究的四矩阵编码相结合，设计了一种新颖的四矩阵同步搜索交叉算子（Four-Matrix Synchronous Search Crossover, 4M-SX）。与三种传统交叉算子一起组成混合交叉机制。 
+[P142] [Heading 3] 4.5.1. Crossover Operator (交叉)
+[P143] [Normal] 本文将Guan等人(Guan et al., 2023)提出的 SX 算子扩展至四矩阵编码框架，形成四矩阵同步搜索交叉算子（4M-SX）。由于矩阵M、Q、V、W 之间存在强物理耦合性，交叉操作以工序元组(Mᵢⱼ,Qᵢⱼ,Vᵢⱼ,Wᵢⱼ)为原子单元进行同步交换，以保证子代解满足所有约束。同时，本文还构建了包含部分映射交叉（PMX）、顺序交叉（OX）和基于位置的交叉（OBX）的辅助算子池(Kahraman et al., 2008, Cheng et al., 1996, Engin et al., 2011, Oğuz & Ercan, 2005)，以概率P激活4M-SX，以概率1−P从辅助算子池中以等概率随机抽取PMX、OX或OBX执行，平衡迭代前期的探索广度与后期的收敛深度。其中概率P的计算公式如下所示，其中是当前迭代次数。是最大迭代次数。是预设参数。
+
+[P144] [Normal] 在执行4M-SX时，算子首先依据非支配等级（Rank越低越优）与拥挤距离（CD越大分布越稀疏）确定引导解（Guide）与基底解（Base）：适应度更优的父代担任引导解，使搜索方向始终朝向 Pareto 前沿的高质量区域。随后，算子随机抽取参考阶段 s，对基底解和引导解的优先级矩阵列Q进行稳定排序（以Q值为主键、工件编号为次键），获得两条参考工件序列。算子按引导解的序列对基底解进行逐位调整：位置若已对齐则跳过，否则以四矩阵元组为单位执行原子交换。每次交换后均执行可行性修复与解码评估，合格的候选解入池。
+[P145] [Normal] 最终从候选池的第一Pareto前沿中选取拥挤距离最大者作为子代输出；若候选池为空，则返回基底解。需要两个子代时，独立调用Algorithm 4两次，通常产生结构相异的子代，天然保持种群多样性。
+[P146] [Heading 3] 4.5.2. Mutation Operator (变异)
+[P147] [Normal] 考虑到本文研究问题的复杂性，单一的变异策略极易产生不可行解。因此，本文提出本节提出的变异策略包含单工序突变(Single-Operation Mutation, SOM)、工件路径重构(Job Path Reconstruction, JPR)以及机器序列倒置（Machine Sequence Inversion, MSI）三种变异机制。
+[P148] [Normal] （1）SOM：随机选取一道工序，对其进行局部扰动：首先在该阶段可选设备集合中重新选择加工机器并更新；随后重新选择加工速度等级并更新；最后依据技能–速度的向下兼容规则同步更新，确保速度等级不超过工人可操作上限。
+[P149] [Normal] （2）JPR：随机选取工件，对其在各阶段的决策进行联动扰动：对每个阶段的工序依次重新选择机器与速度等级，并据此更新技能等级，从而一次性改变该工件的生产路线与资源配置。
+[P150] [Normal] （3）MSI：随机选取某阶段的一台机器，提取其加工队列，从中选取一段连续子序列并执行倒序操作；随后同步更新对应工序的排序键（或等价顺序表示），从而实现机器内排序结构的非微小调整。
+[P151] [Heading 2] 4.6. Selection Mechanisms (选择机制)
+[P152] [Normal] 本节统一阐述算法在全局演化阶段所采用的父代选择（Mating selection）与环境筛选策略（Environmental selection）。两类选择均基于个体的非支配等级（rank）与拥挤距离（crowding distance, CD），且所有参与比较的个体均已完成Repair + DecodeEvaluate，以保证排序与选择的可比性与可行性一致性。
+[P153] [Heading 3] 4.6.1. Mating Selection (父代选择)
+[P154] [Normal] 父代选择旨在从当前种群中挑选出具备优良基因的个体进入交配池（Mating Pool），以执行后续的交叉与变异操作。本文采用二元锦标赛选择（Binary Tournament Selection）机制。每次选择时，从种群中随机抽取两个候选个体和，并基于个体的非支配等级（Rank）与拥挤距离（Crowding Distance, ）进行胜负评判 。
+[P155] [Heading 3] 4.6.2. Environmental Selection (环境选择)
+[P156] [Normal] 环境选择采用精英保留（Elitism）策略：交叉与变异操作完成后，算法将规模为的父代种群与新生成的子代种群合并，构建规模为的混合种群。环境选择的作用是从中精准筛选出个最优个体，形成下一代种群。筛选过程基于快速非支配排序（Fast Non-dominated Sorting）和拥挤距离计算交替进行。
+[P157] [Heading 2] 4.7. Variable Neighborhood Search (VNS) Module (变邻域搜索模块)
+[P158] [Normal] 在经过环境选择并提取出高质量的初始非支配档案集（Archive, AP）后，算法提取其代表解集合（RP）进入局部搜索阶段。本节构建的变邻域搜索（VNS）模块内嵌于多目标模拟退火（MOSA）框架中，专门负责对代表解实施多维度的深度局部搜索，以挖掘当前优良解邻域内的潜在改进空间 。
+[P159] [Heading 3] 4.7.1. Neighborhood Structures (邻域结构设计)
+[P160] [Normal] 鉴于本文所研究的HFSP模型涵盖机器分配、工序排序、速度控制与工人配置等多种因素影响，单一领域结构难以有效获得更优秀的解空间。因此，本文基于四矩阵编码设计了表4所示8种邻域算子，分为单工序、工件级与机器序列三类，形成了递进的扰动机制。
+[P161] [图表样式] 表4 邻域算子
+[P162] [图表样式] Table 4 Neighborhood Operator
+[P163] [Heading 3] 4.7.2. Shaking Strategy (抖动与候选解筛选策略)
+[P164] [Normal] 在多目标环境下，邻域操作生成的候选解往往互不支配。为评估候选解质量并提供防止早熟的抖动（Shaking）机制，本模块引入了标量化综合评价函数：
+[P165] [Normal] 
+[P166] [Normal] 其中，为目标基于当前参考集动态上下界的归一化值，权重用于平衡三项优化目标 。
+[P167] [Normal] 每次针对当前解执行完一轮多邻域探索后，会生成可行候选解集合。为了在“贪婪强化”与“跳出陷阱”之间取得平衡，算法采用-greedy 规则从中选择最终输出的邻域解：以的高概率选择综合评价最优的候选解以确保收敛性；以的概率从中均匀随机抽取一个解作为有效抖动，为后续的MOSA跳出局部帕累托前沿提供多元化的输入。
+[P168] [Heading 3] 4.7.3. Local Search Logic (局部搜索运行逻辑)
+[P169] [Normal] 本模块采用变邻域下降（Variable Neighborhood Descent, VND）的核心框架，对于输入的代表解，算法依次激活邻域结构中的8种算子。每个算子在单次激活中仅对当前解执行一次扰动操作，生成至多一个候选解。若该候选解通过可行性检查与修复，则被收录至候选池；否则予以丢弃。因此，每轮邻域搜索最多向贡献8个候选解，分别对应8种算子各一次的执行结果。
+[P170] [Normal] 与标准VND在发现改进解后立即重启回第一个邻域的机制不同，本模块不设中途重启。所有8种算子在每轮搜索中均被完整执行，候选解统一汇入池后，再由greedy 策略集中选择唯一输出解。该输出解随后进入MOSA模块，并由Metropolis准则决定是否接受更新。下一次MOSA迭代开始时，VNS再次从按固定顺序扫描。
+[P171] [Heading 2] 4.8. 多目标模拟退火精炼（MOSA Refinement）
+[P172] [Normal] 尽管NSGA-II阶段已获得高质量的初始非支配解集，并对其实施了邻域搜索，但受问题本身复杂性的制约，新生成的解仍极易陷入局部最优。为此，本研究引入MOSA框架，其核心在于利用概率接受劣解的机制，为VNS深度局部搜索提供有效的选择通道，从而进一步抑制早熟收敛，提升最终帕累托解集的分布均匀性与收敛质量。
+[P173] [Normal] 本文采用归一化标量综合评价函数来量化解，对于当前解与经VNS输出的候选新解，定义两者间的标量化差值为：
+[P174] [Normal] 
+[P175] [Normal] 若新解支配当前解（即），则无条件接受状态转移。若两者互不支配或新解被支配，则依据Metropolis概率决定是否接受新解：
+[P176] [Normal] 由于基于归一化目标值计算，标量差有界于区间内，通常落在的范围。为保证Boltzmann接受因子在整个退火过程中维持有效的判别能力，本文引入无量纲温度比替代绝对温度，接受概率定义为：
+[P177] [Normal] 
+[P178] [Normal] 由于与处于相同数量级（均位于内），接受概率沿冷却轨迹呈现出良好的校准过渡特性。在退火初期（），典型退化量 对应，算法可广泛探索四矩阵组合空间；当温度降至时，，施加适度选择压力；在退火末期（），，搜索行为收敛为严格的贪婪下降。
+[P179] [Normal] 算法的退火过程采用经典的几何降温策略控制。设定初始温度为，终止温度为，以及冷却系数。在每一个温度层级内，算法对当前代表解集进行完整遍历，对每一个代表解实施VNS扰动与接受判定。单层遍历结束后，系统温度按进行衰减。当或达到最大温度层数时，精炼过程终止，并输出最终非支配档案集作为最优生产调度方案。
+[P180] [Normal] 在上述无量纲化框架下，初始温度不再直接决定初始接受率，而是控制冷却过程的分辨率，即有效温度层数：
+[P181] [Normal] 
+[P182] [Heading 2] 4.9. Feasibility Check and Repair（可行性检查与修复）
+[P183] [Normal] 由于交叉、变异及VNS等扰动操作易破坏四矩阵编码的物理约束，算法在目标评估前严格按以下步骤执行递进式修复：
+[P184] [Normal] （1）机器与速度修复：若工序的机器或速度取值越界（即或，则在其可行域内随机重选与进行替换，并同步重置排序矩阵以保证解码序列的合法性。
+[P185] [Normal] （2）工人技能兼容修复：针对任意存在加工任务的机器，提取其所需最高速度。为其分配满足向下兼容的最经济技能等级，并强制统一该机所有任务的工人指派：
+[P186] [Normal] 
+[P187] [Normal] 若计算得出的超过全局最高技能上限，则强制降低违规工序的速度以实现相容。
+[P188] [Normal] （3）人力资源修复：统计当前解中各等级工人的调用总数。若某技能等级发生超编（），则优先对超额机器实施“工人降级+工序降速”（即令）；若仍不满足，则修改触发任务的跨机迁移，使部分机器空载以释放人力。
+[P189] [Normal] 若候选解在历经上述修复后，仍无法消除系统逻辑冲突，不满足相应约束，则判定修复失败并直接剔除该解。
+
+[P190] [Heading 2] 4.10. Time Complexity Analysis of the Decoding Procedure算法时间复杂度分析
+[P191] [Normal] 为了论证所提算法在计算上的高效性，本节对四矩阵编码单次个体的冲突修复（Repair）与解码评估（Decode & Evaluate）进行时间复杂度分析。设问题规模包含个工件、个阶段、系统总机器数为，且工人技能被划分为个离散等级。
+[P192] [Normal] 在可行性修复阶段，算法需遍历所有道工序进行资源越界与“速度-技能”向下兼容性检查。因单次技能匹配最多遍历个等级，该阶段的最坏时间复杂度为。
+[P193] [Normal] 在解码评估阶段，计算过程涵盖队列初始化、工序排序与状态推演。队列分派与状态线性推演的复杂度均为；而核心计算瓶颈在于各机器等待队列的排序操作。在最极端的资源拥挤状态即某阶段所有工件集中于同一台机器下，综合所有个阶段，基于比较的排序总时间复杂度上限为。
+[P194] [Normal] 综合上述过程，单次解码的严格总时间复杂度为：
+[P195] [Normal] 
+[P196] [Normal] 鉴于实际流水车间中，工件规模通常远大于机器数与技能等级数，上述多项式中的线性项与常数项被主导。因此，算法的渐进时间复杂度可化简为：
+[P197] [Normal] 
+[P198] [Normal] 分析表明，尽管四矩阵编码集成了多维资源的逻辑约束，但其整体时间复杂度依然严格受控于多项式级别，这保证了算法在处理大规模问题时的时效性和可行性。
+[P199] [Normal] 
+[P200] [Heading 1] 
+[P201] [Normal] 
+[P202] [Heading 1] 5. 实验研究与讨论 (Experimental Studies and Discussion)
+[P203] [Normal] 本章旨在通过一系列计算实验验证所提出的NSGA-II-VNS-MOSA算法在求解带有序列依赖设置时间（SDST）和工人技能约束的混合流水车间调度问题（HFSP）时的有效性。首先，介绍了本研究对应的真实案例的具体情况；其次，通过田口方法（Taguchi method; Van Nostrand, 2002）确定了混合算法的最佳参数配置；接着将该算法与经典多目标算法进行了对比分析，并通过消融实验量化VNS与MOSA两个模块的边际贡献；最后，在电烤炉制造的真实案例上验证模型与算法的工程适用性。实验在一台Intel Core i5-10300H CPU@2.50GHz、16GB RAM的计算机上运行，操作系统为Windows 11。为了保证对比公平性，所有算法均采用相同的编码结构与目标计算函数。
+[P204] [Heading 2] 5.1. 真实案例描述
+[P205] [Normal] 如图所示，电烤炉制造中的阶段分布与布局情况如图6所示，每个工件都需要进行三个阶段的加工：贴片阶段、插件阶段与外壳塑形和零部件组装阶段。每一个阶段都设置了不同处理速度的并行机器，每台机器都由一名拥有独特技能等级的工人进行操作，在该案例中，工人的技能水平被设置为三级（最高等级为C，其次为B与A），因此相对应的机器处理工件的速度也被设置为三级（最高为速度3，其次为速度2与速度1），不同技能等级的工资标准与可用人数亦存在差异。
+[P206] [Normal] 表5表示各个阶段的机器在不同状态下的加工速度与各种能耗（其中运输功率和辅助功率都为固定值，分别为0.55KW和1.14KW），表6表示不同工人等级下对应的工资与可用人数，机器的加工时间与换模时间矩阵由于篇幅有限在此省略。
+[P207] [Normal] 
+[P208] [图表样式] 图6 电烤炉车间工艺流程与布局
+[P209] [图表样式] Fig. 6 Process Flow and Layout of Electric Oven Workshop
+[P210] [图表样式] 表5 机器加工速度与能耗参数配置
+[P211] [图表样式] Table 5 Machine Processing Speeds and Energy Parameters
+[P212] [图表样式] 表6 工人技能等级、薪资与人员配置
+[P213] [图表样式] Table 6 Worker Skills, Wages, and Staffing Levels
+[P214] [Heading 2] 5.2. 算法参数校准 (Parameter Calibration)
+[P215] [Normal] 为了充分发挥NSGA-II-VNS-MOSA的性能，确保参考设置的合理性，本文采用田口方法（Taguchi Method）对关键参数进行校准。基于算法结构，选取了四个对性能影响显著的参数作为因子：种群规模()、交叉概率()、变异概率()以及MOSA模块的初始温度()。各因子水平见表7。
+[P216] [Normal] 根据参数数量和水平，本文选择正交表进行测试，根据参数和水平的数量，选择了L16(44)正交表进行试验。此外，本文还采用了倒数世代距离(IGD; Zitzler & Thiele, 1999)、超体积(HV; Zitzler et al., 2003)和世代距离(GD; Zitzler et al., 2000)作为综合指标来评估算法的收敛性、多样性和分布情况。IGD越小，HV越大，GD越小，算法性能越好。所有实验均独立运行30次，括号内为标准差。通常情况下，本文无法找到真正的帕累托前沿作为参考，因此我们采用所有运行解的并集构造参考前沿。表8列出了在不同参数水平下该算法的IGD、HV和GD的均值和标准差的实验结果。
+[P217] [图表样式] 表7 田口试验因子与水平
+[P218] [图表样式] Table 7 Taguchi factors and levels
+[P219] [图表样式] 表8 参数组合性能（均值±标准差）
+[P220] [图表样式] Table 8 Performance under parameter combinations (mean ± SD)
+[P221] [Normal] 根据表8中参数组合的结果，可以得到各参数的效应图（图7）。用于分析各参数对三指标的影响趋势与波动特征。结果表明，HV、IGD和GD的最优参数组合一致。因此，综合判断，最佳参数组合确定为
+[P222] [Normal] =200，=0.95，=0.15，=1000.
+[P223] [Normal] 
+[P224] [图表样式] 图7 三种指标的效应图: (a)HV, (b)IGD, (c)GD.
+[P225] [图表样式] Figure 7 Effects plot of three metrics: (a)HV, (b)IGD, (c)GD.
+[P226] [Heading 2] 5.3. MILP模型验证与精确前沿对比 (MILP Validation and Exact Pareto Front Comparison)
+[P227] [Normal] 为验证第3节所建立的MILP模型的约束正确性，并为后续元启发式算法的性能评估提供可靠的基准参考，本节采用ε-约束法（ε-constraint method; Mavrotas, 2009）对5组小规模实例进行精确求解。所有MILP子问题均使用Gurobi 11.0求解器在相同计算环境下执行。
+[P228] [Heading 3] 5.3.1. 验证实例设计
+[P229] [Normal] 验证实例的规模设置参照真实案例的阶段结构（，每阶段2台并行机，3种技能等级），工件数从3逐步增至12，具体配置见表X。所有实例的加工时间、SDST矩阵及能耗参数均从真实工厂数据中获得，以保证验证结果的真实性与准确性。
+[P230] [图表样式] 表9 验证实验配置
+[P231] [图表样式] Table 9 Configuration of validation instances
+[P232] [Heading 3] 5.3.2. ε-约束法求解流程
+[P233] [Normal] 针对本文的三目标优化问题，ε-约束法的实施分为两个阶段。
+[P234] [Normal] 在第一阶段，分别以、、为单一优化目标对MILP模型进行独立求解，获取各目标的理想值与最差值（）。每个单目标问题的求解时限设为600 s。 
+[P235] [Normal] 在第二阶段，以（Makespan）作为主优化目标，将与转化为ε-约束：
+[P236] [图表样式] 
+[P237] [图表样式] 
+[P238] [Normal] 其中区间内均匀取10个等分点，共生成100个子问题。每个子问题的求解时限为600 s（V4和V5延长至1800秒），允许Gurobi在时限内返回当前最优可行解及其最优性gap。所有可行解汇聚后执行非支配排序，最终输出精确Pareto前沿。
+[P239] [Heading 3] 5.3.3. 求解结果与模型验证
+[P240] [Normal] 表10报告了Gurobi在5组验证实例上的求解统计。对于实例V1与V2，Gurobi能够在600 s时限内将全部可行子问题求解至全局最优（gap = 0%），证明了MILP模型在小规模实例下的约束正确性与可行性。实例V3中，100个 ε-子问题有76个返回可行解，其中61个（80.3%）达到全局最优，其余15个的平均最优性间隙为2.14%，表明模型在中等规模下仍具备较强的可解性。随着问题规模进一步增大，V4的最优率降至47.9%，非最优解的平均gap升至5.87%；V5仅有18.8%的子问题在1800 s内证明最优性，平均gap达11.35%。这从精确求解器的角度验证了本文所建立的MILP模型在逻辑上的自洽性与正确性。
+[P241] [图表样式] 表10 MILP精确求解统计
+[P242] [图表样式] Table 10 MILP exact solution statistics
+[P243] [Normal] 从求解时间角度考察，V1和V2的单个子问题平均求解时间分别为3.62 s和28.45 s，总CPU时间控制在合理范围内。V3的平均求解时间跃升至187.32 s，V4进一步增至842.56 s。V5的平均求解时间已达1523.71 s，总CPU时间超过97500 s（约27.1小时），充分体现了HFSP-SDST问题的NP-hard特性及精确算法在中大规模实例上的计算不可行性。
+[P244] [Heading 3] 5.3.4. 元启发式算法与精确前沿的差距分析
+[P245] [Normal] 以作为参考前沿，计算NSGA-II-VNS-MOSA在30次独立运行下的超体积相对百分比偏差()，结果见表11。
+[P246] [Normal] 
+[P247] [图表样式] 表11 元启发式算法相对精确前沿的HV偏差
+[P248] [图表样式] Table 11 Hypervolume RPD of metaheuristics against exact Pareto front (%)
+[P249] [Normal] 上述结果表明：（1）在最小规模实例V1和V2上，NSGA-II-VNS-MOSA的均低于2%，说明所提算法能够有效逼近精确Pareto前沿；（2）随着问题规模增大，所有元启发式算法与精确前沿的差距均有所扩大，但NSGA-II-VNS-MOSA始终保持最小偏差，验证了其在收敛质量上的优势；（3）更重要的是，MILP模型在所有可行子问题中均未出现约束冲突或逻辑不一致，表明式(7)-(24)所建立的约束体系能够正确描述本文所研究的HFSP-SDST问题。此外，V4与V5实例中Gurobi的平均求解时间已分别达到59800 s和97500 s，进一步印证了中大规模实例下精确算法的计算不可行性，从而为本文采用元启发式方法提供了充分的必要性论据。
+[P250] [Heading 2] 5.4. 对比试验和实例验证（Comparison experiments and instance verification）
+[P251] [Normal] 本节选取MOEA/D(Li & Zhang, 2008)、SPEA2(Zitzler et al., 2001)、MOPSO(Gao et al., 2019)与 MOSA(Bi et al., 2021)作为基准算法，并进一步设置 NSGA-II(Deb et al., 2002)及其三种变体（NSGA-II-VNS、NSGA-II-MOSA、NSGA-II-VNS-MOSA）以检验混合结构的贡献。为了进行公平的比较，所有算法的N和值分别设置为200和500，其余专有参数遵循文献推荐或默认设置，并在不同算法与实例间保持一致。参数设置如表12所示。为了评估所提出的VNS-NSGA-Ⅱ算法的有效性，我们考虑了更大规模的问题。如表13所示，这八种算法在14个不同规模的测试算例下进行了测试，其数据皆来自于真实工厂数据。每个实例进行了30次独立运行，并使用了综合评价指标IGD、HV和GD作为性能评价指标。
+[P252] [图表样式] 表12 对比算法参数设置
+[P253] [图表样式] Table 12 Parameter settings of the compared algorithms
+[P254] [图表样式] 表13 测试算例规模
+[P255] [图表样式] Table 13 Test instance scales
+[P256] [Normal] 
+[P257] [图表样式] 表 14 各算法指标统计结果
+[P258] [图表样式] Table 14 Metric statistics of all algorithms
+[P259] [Normal] 
+[P260] [图表样式] 表 15 各算法指标均值对比（14 个算例）
+[P261] [图表样式] Table 15 Mean metric values across 14 instances
+[P262] [Normal] 
+[P263] [Normal] 图8 各算法最优指标获得次数
+[P264] [Normal] Figure 8 Counts of best metric values by algorithm
+[P265] [Normal] 
+[P266] [图表样式] 图9 各算法 IGD、GD 与 HV 的均值对比
+[P267] [图表样式] Fig.9. Mean IGD, GD and HV by algorithm
+[P268] [Normal] 综合表14、表15与图8、图9的统计结果，可以得到以下结论。第一，NSGA-II-VNS-MOSA 在三项指标上呈现明显的整体优势：在14个实例中，其IGD、GD、HV分别取得10次、12次与12次最优，说明该算法在“收敛质量”和“解集分布”两个维度上均具有更强的稳定性。第二，从表12均值维度考察，NSGA-II-VNS-MOSA 的均值达到 2.141，远高于次优算法 MOPSO 的 1.507。这表明在多目标解空间中，该算法所获得的非支配解集覆盖了更广阔的区域，能为决策者提供在完工时间、能耗与人力成本之间更具灵活性的权衡方案。第三，通过对图8进行分析，本算法在上的显著优势（相对提升幅度最大），验证了MOSA 模块中的Metropolis接受准则有效避免了种群在进化后期的早熟收敛，而VNS的多邻域结构（如机器重分配与工序交换）增强了算法对帕累托前沿两端的延展与探测能力；但值得注意的是在部分中等规模算例（如算例2与算例3）中，尽管本算法的与表现良好，但指标略逊于部分对比算法。这反映了混合搜索策略的一种内在特性：在计算资源有限的情况下，算法倾向于优先扩展解集的广度（Coverage）以逼近前沿面，而非过度从众于局部极值点。这种权衡在处理含有复杂约束（如 SDST 和人力技能约束）的HFSP问题时，往往更具实际工程价值，因为它能避免算法陷入局部最优陷阱，保证了整个前沿面的推进质量。
+[P269] [Heading 2] 5.5. 改进机制的有效性验证
+[P270] [Normal] 为量化 NSGA-II-VNS-MOSA 中各改进模块的边际贡献，验证混合策略的必要性，本节构建了算法演化谱系进行消融实验（Ablation Study）。对比对象包括：基础 NSGA-II、仅引入变邻域搜索的 NSGA-II-VNS、仅引入模拟退火的 NSGA-II-MOSA 以及本文所使用的NSGA-II-VNS-MOSA算法，对比结果如表16与图10所示。
+[P271] [图表样式] 表16 消融实验：相对 NSGA-II 的均值改进幅度
+[P272] [图表样式] Table 16 Ablation study: mean improvements over NSGA-II
+[P273] [Normal] 
+
+[P274] [图表样式] 图10 VNS 与 MOSA 模块贡献率（相对 NSGA-II）
+[P275] [图表样式] Fig.10. Contributions of VNS and MOSA relative to NSGA-II
+[P276] [Normal] 从整体统计结果看，单独引入VNS或MOSA均能改善NSGA-II，但作用侧重不同：NSGA-II的跨实例平均IGD、GD与HV分别约为、与0.80；引入VNS后，IGD与GD的变化幅度较小（IGD约改善1.0%，GD约改善4.2%），而HV提升更明显（约提升17.6%），说明VNS更倾向于改善解集覆盖与分布形态。引入MOSA后，IGD与GD的改善更为显著（IGD约改善13.6%，GD约改善20.6%），但HV的提升相对有限（约提升11.0%），表明MOSA更有利于推动解集向参考前沿收敛。两模块同时引入后，NSGA-II-VNS-MOSA的跨实例平均IGD、GD与HV分别约为、与2.14，相较NSGA-II表现为IGD降低约53.5%、GD降低约35.9%、HV提升约167.0%。该幅度显著高于任一单模块版本，说明 VNS 与 MOSA 在局部收敛和跳出局部最优层面具有明显互补性：VNS 提供结构化的邻域强化以提升解集分布质量，MOSA 通过概率接受机制维持搜索活性并缓解局部最优困境，二者结合更容易同时兼顾收敛与覆盖。
+[P277] [Normal] 需要说明的是，少数小规模实例可能出现单项指标不占优的情况，这更可能反映模块权衡在特定实例结构与固定迭代次数条件下的偏移；该问题可通过后期增强收敛压缩，如提高邻域强化强度或收紧接受概率等方式进一步缓解。
+[P278] [Heading 2] 5.6. 真实案例验证
+[P279] [Normal] 为了直观地展示NSGA-II-VNS-MOSA算法在这个真实案例中的表现，我们使用该算法来寻找最优或近似最优解。表17与图11表示在最佳参数组合的条件下，电烤炉制造车间在面对15个不同工件时，利用混合迭代算法得到的最优方案的甘特图与12个帕累托解。可以观察到，解集中最大完工时间的范围是228分钟到250分钟，对应的人工成本在1350-1800之间，而能耗在123.6084到156.1492浮动。在本文采用的等权偏好设置（权重 1:1:1）条件下，rank 1是最令人满意的调度方案。可以观察到当Makespan与Energy在候选解之间差异相对有限时，决策结果更容易受到 LaborCost 波动的影响。因此在实际生产过程中，技能结构与人员配置是降低人工成本的重要调节变量，后续企业可围绕不同技能等级工人的配比开展情景分析，以获得最优调度方案。
+[P280] [图表样式] 表17 案例的帕累托解排名
+[P281] [图表样式] Table 17 Pareto solution ranking of the case
+[P282] [Normal] 
+[P283] [图表样式] 图11 代表性帕累托解的调度甘特图
+[P284] [图表样式] Fig.11. Gantt chart for a representative Pareto solution
+[P285] [Heading 1] 6. 结论
+[P286] [Normal] 本文研究了电烤炉智能制造场景下集成多技能工人分配、可变加工速度与全周期人力成本的混合流水车间调度问题（HFSP-SDST），旨在同时最小化最大完工时间、总能耗与总人力成本。为刻画该问题的多维决策特征，建立了考虑序列依赖设置时间与人机耦合约束的混合整数线性规划模型，并引入"向下兼容"机制以实现高技能工人在非瓶颈工序中的灵活降速作业。在求解层面，提出了基于四矩阵一体化编码（M, Q, V, W）的NSGA-II-VNS-MOSA混合算法，其中变邻域搜索（VNS）通过八种邻域结构强化局部开发能力，模拟退火接受机制（MOSA）则有效缓解种群早熟收敛，二者在局部收敛与全局探索层面形成显著互补。
+[P287] [Normal] 大量计算实验验证了所提方法的有效性。田口实验确定了算法的最优参数组合。在14组不同规模的测试算例上，NSGA-II-VNS-MOSA在IGD、GD与HV三项指标上均表现出稳定的整体优势，其HV均值达2.14，显著优于MOEA/D、MOPSO、SPEA2等对比算法。消融实验进一步表明，VNS与MOSA的联合引入使IGD降低约53.5%、HV提升约167.0%，远超任一单模块的改进幅度。真实案例验证表明，算法所获Pareto解集能够为决策者提供完工时间、能耗与人力成本之间的多元权衡方案，具备工程应用价值。
+[P288] [Normal] 未来研究可从以下方向展开。其一，扩展模型复杂度，纳入工人疲劳效应、学习曲线及设备随机故障等不确定性因素，以增强调度方案的鲁棒性。其二，将静态调度扩展至动态环境，研究新订单实时到达与紧急插单等情形下的重调度策略。其三，探索深度强化学习与图神经网络等前沿技术与元启发式算法的融合，以应对更大规模问题实例的求解需求。其四，研究多周期生产调度问题，将工人跨周期排班纳入决策框架，进一步提升生产系统的整体可控性。
+[P289] [Heading 1] 7. References
+[P290] [Normal] Annear, L. M., Barak, S., & Maghsoudi, A. (2023). Dynamic assignment of a multi-skilled workforce in job shops. European Journal of Operational Research, 305(2), 678–695.
+[P291] [Normal] Asefi, H., Jolai, F., Rabiee, M., & Tayebi Araghi, M. E. (2014). A hybrid NSGA-II and VNS for solving a bi-objective no-wait flexible flowshop scheduling problem. The International Journal of Advanced Manufacturing Technology, 75, 1017-1031.
+[P292] [Normal] Bahroun, Z., As'ad, R., & Tanash, M. (2024). The multi-skilled resource-constrained project scheduling problem: A systematic review and exploration of future landscapes. Management Systems in Production Engineering, 32(1), 112-128.
+[P293] [Normal] Barak, S., Annear, L. M., & Maghsoudi, A. (2024). Dual resource constrained flexible job shop scheduling with multi-skilled workers. International Journal of Production Research, 62(12), 4321–4345.
+[P294] [Normal] Barak, S., Moghaddam, R. T., & Karimi, B. (2024). Dual resource constrained flexible job shop scheduling with multi-skilled workers: A hybrid metaheuristic approach. Journal of Manufacturing Systems, 72, 234-251.
+[P295] [Normal] Bi, J., Yuan, H., Zhang, J., & Zhou, M. (2021). Green energy forecast-based bi-objective scheduling of tasks across distributed clouds. IEEE Transactions on Sustainable Computing, 7(3), 619–630.
+[P296] [Normal] Bouazza, W., Bendotti, P., Fouilhoux, P., et al. (2024). Integrating NSGA-II and Discrete-Event Simulation for multi-objective hybrid flowshop scheduling. Journal of Manufacturing Systems, 75, 155–173.
+[P297] [Normal] Behnamian, J., Zandieh, M., & Fatemi Ghomi, S. M. T. (2009). Parallel-machine scheduling problems with sequence-dependent setup times using an ACO, SA and VNS hybrid algorithm. Expert Systems with Applications, 36(6), 9637-9644.
+[P298] [Normal] Cai, J., Lu, S., Cheng, J., Wang, L., Gao, Y., & Tan, T. (2022). Collaborative variable neighborhood search for multi-objective distributed scheduling in two-stage hybrid flow shop with sequence-dependent setup times. Scientific Reports, 12(1), 15476.
+[P299] [Normal] Cai, L., Liu, M., Liu, Q., et al. (2024). Incorporation of energy-consumption optimization into multi-objective hybrid flow-shop scheduling problem. Computers & Industrial Engineering, 182, Article 109345.
+[P300] [Normal] Chen, L., Liu, M., & Liu, Q. (2023). A knowledge-based NSGA-II algorithm for multi-objective hot rolling production scheduling under flexible time-of-use electricity pricing. Journal of Manufacturing Systems, 68, 214–230.
+[P301] [Normal] Cheng, R., Gen, M., & Tsujimura, Y. (1996). A tutorial survey of job-shop scheduling problems using genetic algorithms—I. Representation. Computers & Industrial Engineering, 30, 983–997.
+[P302] [Normal] Deb, K., Agrawal, S., Pratap, A., Meyarivan, T. (2000). A fast elitist non-dominated sorting genetic algorithm for multi-objective optimization: NSGA-II. In Parallel Problem Solving from Nature PPSN VI: 6th International Conference Paris, France, September 18–20. (2000). Proceedings 6 (pp. 849–858). Berlin Heidelberg: Springer.
+[P303] [Normal] Deb, K., Pratap, A., Agarwal, S., & Meyarivan, T. (2002). A fast and elitist multiobjective genetic algorithm: NSGA-II. IEEE Transactions on Evolutionary Computation, 6(2), 182–197.
+[P304] [Normal] Delgoshaei, A., Ariffin, M. K. A. M., Baharudin, B. H. T., & Leman, Z. (2023). Review evolution of dual-resource-constrained scheduling problems in manufacturing systems: Modeling and scheduling methods' trends. Soft Computing, 27(14), 9509-9537.
+[P305] [Normal] Engin, O., Ceran, G., & Yilmaz, M. K. (2011). An efficient genetic algorithm for hybrid flow shop scheduling with multiprocessor task problems. Applied Soft Computing, 11, 3056–3065.
+[P306] [Normal] Feng, Y., Liu, Q., Li, P., et al. (2023). Multi-objective hybrid flow-shop scheduling in parallel sequential movement mode considering setup time. Applied Sciences, 13(6), Article 3563.
+[P307] [Normal] Gao, K., Cao, Z., Zhang, L., Chen, Z., Han, Y., & Pan, Q. (2019). A review on swarm intelligence and evolutionary algorithms for solving flexible job shop scheduling problems. IEEE/CAA Journal of Automatica Sinica, 6(4), 904–916.
+[P308] [Normal] Gao, Q., Chen, J., Wang, Y., et al. (2024). Agent-based simulation and optimization of hybrid flow shop considering multi-skilled workers and fatigue factors. Robotics and Computer-Integrated Manufacturing, 85, Article 102634.
+[P309] [Normal] Gong, G., Deng, Q., Gong, X., Liu, W., & Ren, Q. (2020). Energy-efficient flexible flow shop scheduling with worker flexibility. Expert Systems with Applications, 148, Article 113232.
+[P310] [Normal] Guan, Y., Chen, Y., Gan, Z., Zou, Z., Ding, W., Zhang, H., Liu, Y., & Ouyang, C. (2023). Hybrid flow-shop scheduling in collaborative manufacturing with a multi-crossover-operator genetic algorithm. Journal of Industrial Information Integration, 36, Article 100514.
+[P311] [Normal] Guerrero, B., Lusa, A., & Corominas, A. (2025). Sustainable optimisation approaches for production planning and control: A review. International Journal of Production Research, 63(2), 456-478.
+[P312] [Normal] Hidri, L. (2024). Multi-stage hybrid flow shop scheduling problem with lag, unloading times, and sequence-dependent setup times. PeerJ Computer Science, 10, Article e2168.
+[P313] [Normal] Hajji, M. K., Hamlaoui, O., & Hadda, H. (2024). A simulated annealing metaheuristic approach to hybrid flow shop scheduling problem. Advances in Industrial and Manufacturing Engineering, 9, 100179.
+[P314] [Normal] Kahraman, C., Engin, O., Kaya, I., & Yilmaz, M. K. (2008). An application of effective genetic algorithms for solving hybrid flow shop scheduling problems. International Journal of Computational Intelligence Systems, 1, 134–147.
+[P315] [Normal] Katiraee, N., De Carlo, F., Giacomo, S., et al. (2021). Consideration of workers' differences in production scheduling: a systematic literature review. International Journal of Production Research, 59(18), 5678–5701.
+[P316] [Normal] Khan, M. I., Hussain, A., & Malik, M. N. (2025). Integrating industry 4.0 for enhanced sustainability: A comprehensive review. Journal of Cleaner Production, 438, Article 140789.
+[P317] [Normal] Kirkpatrick, S., Gelatt, C. D., & Vecchi, M. P. (1983). Optimization by simulated annealing. Science, 220(4598), 671-680.
+[P318] [Normal] Li, H., & Zhang, Q. (2008). Multiobjective optimization problems with complicated Pareto sets, MOEA/D and NSGA-II. IEEE transactions on evolutionary computation, 13 (2), 284–302.
+[P319] [Normal] Li, H., Gao, L., Pan, Q. K., et al. (2023). A multi-objective complex product assembly scheduling problem considering multi-skilled worker assignment. International Journal of Production Research, 61(15), 5123–5145.
+[P320] [Normal] Li, H., Zhang, J., Chen, X., Guo, H., & Liu, J. (2025). Multi-objective scheduling for complex assembly shops considering multiple human factors. Computers & Industrial Engineering, 189, Article 109945.
+[P321] [Normal] Li, P., Liu, M., Liu, Q., et al. (2023). Multi-objective energy-efficient hybrid flow shop scheduling with sequence-dependent setup times. Computers & Operations Research, 159, Article 106331.
+[P322] [Normal] Li, P., Xue, Q., Zhang, Z., Chen, J., & Zhou, D. (2023). Multi-objective energy-efficient hybrid flow shop scheduling using Q-learning and GVNS driven NSGA-II. Computers & Operations Research, 159, Article 106360.
+[P323] [Normal] Li, K., et al. (2022). A Multiobjective Variable Neighborhood Search with learning and swarm for hybrid flowshop scheduling. Processes, 10(9), 1786.
+[P324] [Normal] Luan, F., Cai, Z., Zhao, S., et al. (2023). Fuzzy correlation entropy-based NSGA-II for energy-efficient hybrid flow-shop scheduling problem. Knowledge-Based Systems, 277, Article 110808.
+[P325] [Normal] Lv, L., Chen, L., & Liu, Q. (2023). An improved NSGA-II with local search for multi-objective integrated production and inventory scheduling. Journal of Manufacturing Systems, 70, 112–128.
+[P326] [Normal] Meng, L., Zhang, C., Shao, X., et al. (2020). More MILP models for hybrid flow shop scheduling with sequence-dependent setup times. International Journal of Production Research, 58(18), 5432–5451.
+[P327] [Normal] Missaoui, A., & Hidri, L. (2026). Multi-objective energy-efficient scheduling in two-stage no-wait hybrid flowshop. Journal of Cleaner Production, 450, Article 123456.
+[P328] [Normal] Mlekusch, J., Grönkvist, M., & Schierz, A. C. (2025). The dual-resource-constrained re-entrant flexible flow shop scheduling problem with multi-skilled workers. International Journal of Production Research, 63(2), 1234–1256.
+[P329] [Normal] Mladenović, N., & Hansen, P. (1997). Variable neighborhood search. Computers & Operations Research, 24(11), 1097-1100.
+[P330] [Normal] Mavrotas, G. (2009). Effective implementation of the ε-constraint method in multi-objective mathematical programming problems. Applied Mathematics and Computation, 213(2), 455–465.
+[P331] [Normal] Nasirian, A., Ahmadi, A., & Rabbani, M. (2025). Multiskilled workforce staffing and scheduling: A logic-based Benders decomposition approach. European Journal of Operational Research, 312(3), 1089-1105.
+[P332] [Normal] Neufeld, J. S., Gupta, J. N. D., & Buscher, U. (2023). A systematic review of multi-objective hybrid flow shop scheduling problems. European Journal of Operational Research, 309(1), 1-23.
+[P333] [Normal] Nelson, R. T. (1968). Dual-resource constrained series service systems. Operations Research, 16(2), 324-341.
+[P334] [Normal] Oguz, C., & Ercan, M. F. (2005). A genetic algorithm for hybrid flow-shop scheduling with multiprocessor tasks. Journal of Scheduling, 8, 323–351.
+[P335] [Normal] Ostovari, A., Rabbani, M., & Jolai, F. (2024). Multi-objective production scheduling and workforce planning in sustainable reconfigurable manufacturing system. Progress in Additive Manufacturing, 9, 1023-1045.
+[P336] [Normal] Seifi, C., & Zimmermann, J. (2021). Integer linear programs and heuristic solution approaches for multi-skilled worker scheduling in potash mines. OR Spectrum, 43(3), 789–823.
+[P337] [Normal] Sun, X., Li, J. Q., Song, M. X., et al. (2023). A hybrid genetic algorithm for distributed hybrid blocking flow-shop scheduling problem. Journal of Manufacturing Systems, 68, 155–173.
+[P338] [Normal] Sun, X., Li, J. Q., Song, M. X., et al. (2024). An improved non-dominated sorting genetic algorithm II for distributed heterogeneous hybrid flow-shop scheduling with blocking constraints. Journal of Manufacturing Systems, 74, 112–135.
+[P339] [Normal] Stamadianos, T., et al. (2023). A hybrid simulated annealing and variable neighborhood search algorithm for the close-open electric vehicle routing problem. Annals of Mathematics and Artificial Intelligence, 91, 1025-1055.
+[P340] [Normal] Thakur, K., Kumar, S., & Tiwari, M. K. (2024). A 3D multiobjective multi-item eco-routing problem for refrigerated fresh products delivery using NSGA-II with hybrid chromosome. Computers & Industrial Engineering, 188, Article 109876.
+[P341] [Normal] Tian, X., Li, J. Q., Huang, J. P., et al. (2025). Efficient heuristics for the hybrid flow shop scheduling problem with missing operations. Computers & Industrial Engineering, 190, Article 110234.
+[P342] [Normal] Tótha, N., & Korytkowski, P. (2021). Assignment of multi-skilled workers subjected to fatigue in manufacturing systems. International Journal of Production Research, 59(12), 3542–3561.
+[P343] [Normal] Van Nostrand, R. C. (2002). Design of experiments using the taguchi approach: 16 steps to product and process improvement, 289-289.
+[P344] [Normal] Varadharajan, T. K., & Rajendran, C. (2005). A multi-objective simulated-annealing algorithm for scheduling in flowshops to minimize the makespan and total flowtime of jobs. European Journal of Operational Research, 167(3), 772-795.
+[P345] [Normal] Walter, M., & Zimmermann, J. (2021). The MPS planning under lead time uncertainty with multi-skilled workers. Journal of Scheduling, 24(4), 451–478.
+[P346] [Normal] Wang, Y. J., Liu, Q., Li, P., et al. (2023). Multi-objective energy-efficient hybrid flow shop scheduling using Q-learning and GVNS driven NSGA-II. Applied Soft Computing, 145, Article 110561.
+[P347] [Normal] Yeh, C. T., & Chen, Y. L. (2023). Hybrid flow-shop manufacturing network reliability evaluation using NSGA-II and TOPSIS. Applied Mathematical Modelling, 118, 456–478.
+[P348] [Normal] Yu, F., Zhao, F., Zhu, N., et al. (2024). Modeling and optimization algorithm for energy-efficient distributed assembly hybrid flowshop scheduling problem considering worker resources (EDAHFSPW). Journal of Manufacturing Systems, 72, 456–475.
+[P349] [Normal] Yuan, L., et al. (2026). An adaptive VNS-based evolutionary optimization for hybrid flowshop scheduling with consistent sublots. Swarm and Evolutionary Computation.
+[P350] [Normal] Yue, X., Xiong, X., Zhang, M., Xu, X., & Yang, L. (2025). Multi-objective optimization for energy-efficient hybrid flow shop scheduling problem in panel furniture intelligent manufacturing with transportation constraints. Expert Systems with Applications, 274, Article 126830.
+[P351] [Normal] Zahid, A., Iqbal, J., & Khan, S. (2024). Towards smart scheduling in the era of Industry 4.0 for manufacturing: A systematic review. IEEE Access, 12, 45678-45695.
+[P352] [Normal] Zanjani, B., Gholami, S., & Jalali, S. (2021). Robust multi-objective hybrid flow shop scheduling. Journal of Applied Research on Industrial Engineering, 8(1), 45–62.
+[P353] [Normal] Zhang, Z., Shao, X., Li, W., et al. (2023). A genetic-simulated annealing algorithm for stochastic seru production scheduling. International Journal of Production Research, 61(7), 2145–2162.
+[P354] [Normal] Zitzler, E., & Thiele, L. (1999). Multiobjective evolutionary algorithms: A comparative case study and the strength Pareto approach. IEEE transactions on Evolutionary Computation, 3(4), 257–271.
+[P355] [Normal] Zitzler, E., Deb, K., & Thiele, L. (2000). Comparison of multiobjective evolutionary algorithms: Empirical results. Evolutionary computation, 8(2), 173–195.
+[P356] [Normal] Zitzler, E., Laumanns, M., & Thiele, L. (2001). SPEA2: Improving the strength Pareto evolutionary algorithm. TIK report, 103.
+[P357] [Normal] Zitzler, E., Thiele, L., Laumanns, M., Fonseca, C. M., & Da Fonseca, V. G. (2003). Performance assessment of multiobjective optimizers: An analysis and review. IEEE Transactions on evolutionary computation, 7(2), 117–132.

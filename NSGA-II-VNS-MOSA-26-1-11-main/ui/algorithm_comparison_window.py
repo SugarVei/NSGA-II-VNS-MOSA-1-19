@@ -778,13 +778,11 @@ class AlgorithmComparisonWindow(QDialog):
             file_name = f"comparison_{timestamp}.csv"
             file_path = os.path.join(save_dir, file_name)
             
-            # 写入CSV文件
+            # 写入汇总CSV文件（保持原有格式）
             with open(file_path, 'w', encoding='utf-8') as f:
-                # 写入表头
                 f.write("Case_No,Problem_Scale,Algorithm,IGD_Mean,IGD_Std,HV_Mean,HV_Std,GD_Mean,GD_Std,Composite_Mean,Composite_Std,Valid_Runs\n")
                 
                 for case_no in sorted(self.results.keys()):
-                    # 查找对应的算例
                     case = next((c for c in self.cases if c.case_no == case_no), None)
                     scale_str = case.problem_scale_str if case else "Unknown"
                     
@@ -798,11 +796,44 @@ class AlgorithmComparisonWindow(QDialog):
                             f"{metrics.get('n_valid_runs', 0)}\n"
                         )
             
+            # 额外保存 per-run 长格式CSV（用于 Wilcoxon 秩和检验）
+            per_run_file = os.path.join(save_dir, f"comparison_{timestamp}_per_run.csv")
+            self._save_per_run_csv(per_run_file)
+            self.log_text.append(f"💾 Per-run 数据已保存到: {per_run_file}")
+            
             return file_path
             
         except Exception as e:
             self.log_text.append(f"⚠️ 自动保存失败: {str(e)}")
             return ""
+    
+    def _save_per_run_csv(self, file_path: str):
+        """保存每次独立运行的原始指标值到长格式CSV文件
+        
+        输出格式：每行对应一次独立运行，直接兼容 Wilcoxon 秩和检验。
+        
+        Args:
+            file_path: CSV文件保存路径
+        """
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write("Algorithm,Instance,Run,IGD,HV,GD,Composite\n")
+            
+            for case_no in sorted(self.results.keys()):
+                for alg_name, metrics in self.results[case_no].items():
+                    igd_vals = metrics.get('igd_values', [])
+                    hv_vals = metrics.get('hv_values', [])
+                    gd_vals = metrics.get('gd_values', [])
+                    comp_vals = metrics.get('composite_values', [])
+                    
+                    n_runs = len(igd_vals)
+                    for run_idx in range(n_runs):
+                        f.write(
+                            f"{alg_name},{case_no},{run_idx + 1},"
+                            f"{igd_vals[run_idx]:.8f},"
+                            f"{hv_vals[run_idx]:.8f},"
+                            f"{gd_vals[run_idx]:.8f},"
+                            f"{comp_vals[run_idx]:.8f}\n"
+                        )
     
     def _setup_result_tables(self):
         """设置结果表格 - 论文级展示优化"""
@@ -913,7 +944,7 @@ class AlgorithmComparisonWindow(QDialog):
         QMessageBox.critical(self, "错误", error_message)
     
     def export_results(self):
-        """导出结果到 CSV（长表格式）"""
+        """导出结果到 CSV（汇总表 + per-run 长格式表）"""
         if not self.results:
             return
         
@@ -923,12 +954,11 @@ class AlgorithmComparisonWindow(QDialog):
         
         if file_path:
             try:
+                # 1. 导出汇总表（保持原有格式）
                 with open(file_path, 'w', encoding='utf-8') as f:
-                    # 写入表头
                     f.write("Case_No,Problem_Scale,Algorithm,IGD_Mean,IGD_Std,HV_Mean,HV_Std,GD_Mean,GD_Std,Composite_Mean,Composite_Std,Valid_Runs\n")
                     
                     for case_no in sorted(self.results.keys()):
-                        # 查找对应的算例
                         case = next((c for c in self.cases if c.case_no == case_no), None)
                         scale_str = case.problem_scale_str if case else "Unknown"
                         
@@ -942,6 +972,15 @@ class AlgorithmComparisonWindow(QDialog):
                                 f"{metrics.get('n_valid_runs', 0)}\n"
                             )
                 
-                QMessageBox.information(self, "成功", f"结果已导出到:\n{file_path}")
+                # 2. 额外导出 per-run 长格式CSV（用于 Wilcoxon 检验）
+                base, ext = os.path.splitext(file_path)
+                per_run_path = f"{base}_per_run{ext}"
+                self._save_per_run_csv(per_run_path)
+                
+                QMessageBox.information(
+                    self, "导出成功",
+                    f"汇总结果已导出到:\n{file_path}\n\n"
+                    f"Per-run 原始数据（Wilcoxon检验用）已导出到:\n{per_run_path}"
+                )
             except Exception as e:
                 QMessageBox.critical(self, "错误", f"导出失败: {str(e)}")

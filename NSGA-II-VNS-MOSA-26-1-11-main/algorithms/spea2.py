@@ -293,24 +293,18 @@ class SPEA2:
                 parent2 = self.archive[p2_idx]
                 
                 # 交叉
-                child1, child2 = apply_crossover_with_probability(
+                child = apply_crossover_with_probability(
                     parent1, parent2, self.crossover_prob,
                     self.rng, self.problem, self.decoder
                 )
                 
                 # 变异
-                child1 = apply_mutation_with_probability(
-                    child1, self.mutation_prob,
-                    self.rng, self.problem, self.decoder
-                )
-                child2 = apply_mutation_with_probability(
-                    child2, self.mutation_prob,
+                child = apply_mutation_with_probability(
+                    child, self.mutation_prob,
                     self.rng, self.problem, self.decoder
                 )
                 
-                new_population.append(child1)
-                if len(new_population) < self.pop_size:
-                    new_population.append(child2)
+                new_population.append(child)
             
             self.population = new_population
         
