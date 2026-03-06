@@ -2,56 +2,130 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Claude 风格全局样式 */
+/* ======================================================
+   Paper-Reader-Pro 全局样式 — 深度复刻 Claude 极简风格
+   ====================================================== */
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+               'Noto Sans SC', 'PingFang SC', sans-serif;
+  background: #F9F9F9;
+  color: #1A1A1A;
 }
 
-/* 自定义滚动条 — 极简风格 */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* ---- 隐藏原生滚动条（全局） ---- */
+* {
+  scrollbar-width: none;           /* Firefox */
+  -ms-overflow-style: none;        /* IE / Edge */
 }
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #D1D1D1;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #ABABAB;
+*::-webkit-scrollbar {
+  display: none;                   /* Chrome / Safari */
 }
 
-/* PDF 渲染容器 */
+/* ---- PDF Canvas 容器 ---- */
 .pdf-page-canvas {
   display: block;
   margin: 0 auto;
 }
 
-/* 译文绝对定位层 */
+/* ---- 译文绝对定位层 ----
+   右侧容器设 position:relative，
+   每个译文 div 用 position:absolute + top/left/width 精准定位 */
 .translation-overlay {
   position: relative;
 }
+
 .translation-block {
   position: absolute;
-  background: rgba(255, 255, 255, 0.92);
+  /* 半透明白底 + 左侧琥珀色指示条 */
+  background: rgba(255, 255, 255, 0.95);
   border-left: 3px solid #D97706;
-  padding: 4px 8px;
+  padding: 4px 10px;
   font-size: 13px;
-  line-height: 1.6;
-  color: #1A1A1A;
-  border-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  line-height: 1.7;
+  color: #2D2D2D;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  /* 防止译文溢出，优雅断词 */
+  overflow-wrap: break-word;
+  word-break: break-all;
 }
 
-/* 聊天消息样式 */
-.chat-message-user {
+/* ---- 聊天消息气泡 — Claude 风格 ---- */
+.chat-bubble-user {
   background: #F5F3EF;
-  border-radius: 1rem 1rem 0.25rem 1rem;
+  border-radius: 1.25rem 1.25rem 0.25rem 1.25rem;
 }
-.chat-message-ai {
+
+.chat-bubble-ai {
   background: #FFFFFF;
-  border: 1px solid #E8E5E0;
-  border-radius: 1rem 1rem 1rem 0.25rem;
+  border: 1px solid #EBEBEB;
+  border-radius: 1.25rem 1.25rem 1.25rem 0.25rem;
+}
+
+/* AI 回答内的 Markdown 渲染 */
+.chat-bubble-ai p {
+  margin-bottom: 0.5em;
+}
+.chat-bubble-ai p:last-child {
+  margin-bottom: 0;
+}
+.chat-bubble-ai code {
+  background: #F5F5F5;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.88em;
+}
+.chat-bubble-ai pre {
+  background: #F5F5F5;
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.chat-bubble-ai ul,
+.chat-bubble-ai ol {
+  padding-left: 1.2em;
+  margin: 4px 0;
+}
+
+/* ---- 打字机光标动画 ---- */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.typing-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: #D97706;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink 0.8s ease-in-out infinite;
+}
+
+/* ---- 配置弹窗遮罩层 ---- */
+.modal-backdrop {
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+}
+
+/* ---- 上传区域拖拽反馈 ---- */
+.upload-zone-active {
+  border-color: #D97706 !important;
+  background: #FFFBEB !important;
+}
+
+/* ---- 模式切换 Tab 过渡 ---- */
+.tab-active {
+  background: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  font-weight: 500;
+  color: #1A1A1A;
+}
+.tab-inactive {
+  color: #999999;
+}
+.tab-inactive:hover {
+  color: #555555;
 }
