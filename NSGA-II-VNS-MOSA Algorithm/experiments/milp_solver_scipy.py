@@ -1,3 +1,13 @@
+# -*- coding: utf-8 -*-
+"""
+基于 scipy 的 MILP 精确求解器
+SciPy-based MILP Exact Solver
+
+将 HFSP-SDST 问题编码为混合整数线性规划，并通过 scipy.optimize.milp
++ ε-约束法求得参考 Pareto 前沿（F1: makespan, F2: labor cost,
+F3: energy）。仅用于小规模验证算例 V1-V5，作为元启发式结果质量的上界对照。
+"""
+
 import numpy as np
 from scipy.optimize import milp, Bounds, LinearConstraint
 import scipy.sparse as sp

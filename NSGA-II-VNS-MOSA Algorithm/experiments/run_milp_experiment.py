@@ -1,3 +1,14 @@
+# -*- coding: utf-8 -*-
+"""
+MILP 验证实验主脚本
+MILP Validation Experiment Driver
+
+逐一对验证算例 V1–V5 执行：
+  1) 用 scipy.milp + ε-约束法求得精确参考 Pareto 前沿（PF_ref）；
+  2) 分别运行 NSGA2-VNS-MOSA、NSGA2、SPEA2、MOPSO、MOEAD 并收集结果；
+  3) 以 PF_ref 为基准计算 HV 等指标，输出论文附录中的对比表 Y/Z。
+"""
+
 import os
 import sys
 import time

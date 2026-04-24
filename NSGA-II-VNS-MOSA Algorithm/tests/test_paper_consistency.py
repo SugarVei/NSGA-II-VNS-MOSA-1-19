@@ -1,5 +1,11 @@
-
 # -*- coding: utf-8 -*-
+"""
+论文一致性快速测试
+Paper Consistency Smoke Tests
+
+验证 Solution.repair 产生的解严格满足论文中定义的人机耦合、技能-速度
+向下兼容及工人可用性等约束；也覆盖 NSGA2_VNS_MOSA 端到端可运行性。
+"""
 
 import pytest
 

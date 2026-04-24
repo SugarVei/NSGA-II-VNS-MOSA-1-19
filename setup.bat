@@ -24,7 +24,7 @@ python --version
 
 REM 进入项目目录
 cd /d "%~dp0"
-cd NSGA-II-VNS-MOSA-26-1-11-main
+cd "NSGA-II-VNS-MOSA Algorithm"
 
 echo.
 echo [2/5] 正在创建虚拟环境...
@@ -62,7 +62,7 @@ echo    环境配置完成!
 echo ========================================
 echo.
 echo 启动程序请运行:
-echo    cd NSGA-II-VNS-MOSA-26-1-11-main
+echo    cd "NSGA-II-VNS-MOSA Algorithm"
 echo    python main.py
 echo.
 echo 或者直接双击 run.bat 启动
